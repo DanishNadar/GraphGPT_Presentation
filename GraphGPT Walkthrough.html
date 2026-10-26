@@ -1,0 +1,1515 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>GraphGPT Walkthrough</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one chapter at a time on a dark "signal" stage; explanation rail on the left, live diagram on the right.
+   Red = graph side / trained / the target paper. Blue = language side / frozen / words. Same code as the slide deck. */
+:root {
+  color-scheme: dark;
+  --bg: #070916; --bg2: #0B0E22; --panel: #10142C; --panel2: #151A38; --line: #262D55; --grid: rgba(110,130,255,.07);
+  --fg: #E9EDF8; --hi: #F6F7FD; --muted: #A6B0CC; --dim: #7F8AA8;
+  --red: #F2385A; --red2: #FF6B84; --redbg: rgba(242,56,90,.14);
+  --blue: #4C8DFF; --blue2: #8DB6FF; --bluebg: rgba(76,141,255,.14);
+  --violet: #B65CFF; --gray: #8A94AD; --good: #4C8DFF; --bad: #F2385A;
+  --grad: linear-gradient(90deg, #FF4D6A 0%, #B65CFF 50%, #5B9BFF 100%);
+  --f-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --f-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --gut-l: max(16px, env(safe-area-inset-left, 0px)); --gut-r: max(16px, env(safe-area-inset-right, 0px));
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 400 16px/1.55 var(--f-body); overflow: hidden; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg2); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--blue2); outline-offset: 2px; border-radius: 6px; }
+a { color: var(--blue2); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.c-red { color: var(--red2); } .c-blue { color: var(--blue2); } .c-muted { color: var(--muted); } .c-dim { color: var(--dim); } .c-violet { color: #CFA2FF; }
+b, strong { color: var(--hi); font-weight: 600; }
+
+#app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); }
+.bar { display: flex; align-items: center; gap: 12px; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 10px; background: rgba(11,14,34,.92); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); position: relative; z-index: 3; }
+.bar.foot { border-top: 1px solid var(--line); border-bottom: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 15px var(--f-display); letter-spacing: .08em; white-space: nowrap; cursor: pointer; background: none; border: 0; padding: 0; }
+.mark { width: 26px; height: 26px; position: relative; flex: none; }
+.mark i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+.mark i:nth-child(1) { left: 9px; top: 9px; background: var(--red); box-shadow: 0 0 10px var(--red); }
+.mark i:nth-child(2) { left: 0; top: 0; } .mark i:nth-child(3) { right: 0; top: 2px; } .mark i:nth-child(4) { left: 4px; bottom: 0; }
+.mark::before { content: ""; position: absolute; inset: 3px; border: 1px solid rgba(141,182,255,.45); border-radius: 50%; }
+.secnav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1; }
+.secnav::-webkit-scrollbar { display: none; }
+.secnav button { background: none; border: 0; padding: 7px 11px; border-radius: 8px; color: var(--muted); font: 500 13px var(--f-body); white-space: nowrap; cursor: pointer; position: relative; }
+.secnav button:hover { color: var(--hi); background: var(--panel); }
+.secnav button[aria-current="true"] { color: var(--hi); }
+.secnav button[aria-current="true"]::after { content: ""; position: absolute; left: 11px; right: 11px; bottom: 1px; height: 2px; border-radius: 2px; background: var(--grad); }
+.bar-r { display: flex; gap: 6px; align-items: center; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 600 12px var(--f-mono); letter-spacing: .02em; cursor: pointer; white-space: nowrap; transition: border-color .15s, background .15s; }
+.btn:hover { border-color: #3A4479; background: var(--panel2); }
+.btn[aria-pressed="true"] { border-color: var(--blue); background: var(--bluebg); color: var(--hi); }
+.btn.primary { background: linear-gradient(90deg, #E0294C, #B0306E); border-color: transparent; color: #fff; box-shadow: 0 0 18px rgba(242,56,90,.28); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.ghost { background: transparent; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 2px; background: var(--bg2); }
+.seg .btn { border: 0; background: transparent; padding: 5px 10px; }
+.seg .btn[aria-pressed="true"] { background: var(--panel2); color: var(--hi); box-shadow: inset 0 0 0 1px var(--blue); }
+.crumbbar { display: flex; justify-content: space-between; gap: 12px; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 6px; font: 500 12px var(--f-mono); color: var(--dim); background: var(--bg2); border-bottom: 1px solid rgba(38,45,85,.6); }
+.crumbbar #crumb { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prog { flex: 1; height: 4px; border-radius: 4px; background: var(--panel2); overflow: hidden; }
+#progFill { height: 100%; width: 0; background: var(--grad); transition: width .35s ease; box-shadow: 0 0 10px rgba(242,56,90,.6); }
+#count { color: var(--muted); font-size: 12px; min-width: 56px; text-align: center; }
+
+#stage { overflow-y: auto; overflow-x: hidden; position: relative; background:
+  radial-gradient(1100px 600px at 92% -10%, rgba(76,141,255,.16), transparent 60%),
+  radial-gradient(900px 520px at -8% 110%, rgba(242,56,90,.14), transparent 60%),
+  repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 64px),
+  repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 64px), var(--bg); }
+.slide { max-width: 1280px; margin: 0 auto; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: 28px 40px; display: flex; flex-direction: column; gap: 22px; animation: rise .45s cubic-bezier(.2,.7,.2,1); }
+@keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
+.sh { display: flex; flex-direction: column; gap: 6px; max-width: 980px; }
+.kicker { font: 600 12px var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--red2); }
+.sh h2 { margin: 0; font: 600 clamp(26px, 3.3vw, 40px)/1.12 var(--f-display); letter-spacing: -.02em; color: var(--hi); text-wrap: balance; }
+.sh .dq { color: var(--muted); font-size: 17px; margin: 2px 0 0; max-width: 70ch; }
+.sb { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; align-items: start; }
+.split.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rail p { margin: 0; max-width: 62ch; color: var(--fg); }
+.lede { font-size: 18px; color: var(--hi); }
+.viz { position: relative; background: linear-gradient(180deg, rgba(21,26,56,.88), rgba(13,16,38,.92)); border: 1px solid var(--line); border-radius: 16px; padding: 38px 16px 16px; min-width: 0; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04); }
+.vtag { position: absolute; left: 16px; top: 12px; font: 600 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.vtag .live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: 6px; box-shadow: 0 0 8px var(--red); animation: pulse 1.6s infinite; vertical-align: 1px; }
+@keyframes pulse { 50% { opacity: .35; } }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ctl { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.ctl input[type=range] { accent-color: var(--red); width: 160px; max-width: 100%; }
+.ctl output { color: var(--hi); min-width: 44px; font-size: 13px; }
+.ctl.chk input { accent-color: var(--red); width: 16px; height: 16px; }
+.sel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.stepn { font-size: 12px; margin-left: 4px; }
+
+.card { background: rgba(16,20,44,.85); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card h3, .card h4 { margin: 0; font: 600 18px/1.25 var(--f-display); color: var(--hi); }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card.red { background: var(--redbg); border-color: rgba(242,56,90,.4); }
+.card.blue { background: var(--bluebg); border-color: rgba(76,141,255,.4); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.tile { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.tile .tl { font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.tile .tv { font: 600 24px/1.2 var(--f-display); color: var(--hi); font-variant-numeric: tabular-nums; }
+.tile .ts { font-size: 12px; color: var(--muted); }
+.tile.red { border-color: rgba(242,56,90,.5); box-shadow: inset 0 0 24px rgba(242,56,90,.12); } .tile.red .tv { color: var(--red2); }
+.tile.blue { border-color: rgba(76,141,255,.5); box-shadow: inset 0 0 24px rgba(76,141,255,.12); } .tile.blue .tv { color: var(--blue2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); font: 600 12px var(--f-mono); color: var(--muted); background: var(--bg2); }
+.chip.t { color: #FFD0D8; border-color: rgba(242,56,90,.6); background: var(--redbg); }
+.chip.f { color: #CFE0FF; border-color: rgba(76,141,255,.6); background: var(--bluebg); }
+.chip.t::before, .chip.f::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.eq { font: 400 19px/1.6 'Cambria Math', 'STIX Two Math', 'Times New Roman', serif; color: var(--hi); background: rgba(7,9,22,.6); border: 1px solid var(--line); border-left: 3px solid var(--violet); border-radius: 10px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; }
+.eq .tag { font: 600 11px var(--f-mono); color: var(--dim); letter-spacing: .1em; margin-right: 12px; vertical-align: 2px; }
+.eq i { font-style: italic; } .eq .r { color: var(--red2); } .eq .b { color: var(--blue2); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.src { font: 500 12px/1.5 var(--f-mono); color: var(--dim); }
+.callout { border-radius: 12px; padding: 12px 16px; background: var(--redbg); border: 1px solid rgba(242,56,90,.45); color: var(--fg); font-size: 15px; }
+.callout.blue { background: var(--bluebg); border-color: rgba(76,141,255,.45); }
+.quote { border-left: 3px solid var(--red); padding: 4px 0 4px 14px; color: var(--fg); font-style: italic; margin: 0; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tabs .btn { border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); padding: 8px 12px; border-bottom: 2px solid transparent; }
+.tabs .btn[aria-selected="true"] { color: var(--hi); border-bottom-color: var(--red); background: rgba(242,56,90,.07); }
+.tw { overflow-x: auto; min-width: 0; }
+table.t { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.t th { text-align: left; font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.t td { padding: 8px 10px; border-bottom: 1px solid rgba(38,45,85,.55); }
+table.t td.n, table.t th.n { text-align: right; font-family: var(--f-mono); }
+table.t tr.hl td { background: rgba(242,56,90,.10); }
+.eng-only { display: none !important; }
+body.eng .eng-only { display: revert !important; }
+body.eng .eng-only.card, body.eng .eng-only.callout { display: flex !important; }
+.myth-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.sf { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+.notice { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--muted); }
+.notice > span { flex: none; font: 600 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--blue2); border: 1px solid rgba(76,141,255,.5); border-radius: 6px; padding: 3px 7px; margin-top: 1px; }
+.notice.myth > span { color: var(--red2); border-color: rgba(242,56,90,.5); }
+
+/* SVG flow primitive */
+svg.flow { width: 100%; height: auto; display: block; overflow: visible; }
+.fb { fill: rgba(255,255,255,.02); stroke: var(--line); stroke-dasharray: 4 5; }
+.fb.red { fill: rgba(242,56,90,.05); stroke: rgba(242,56,90,.45); } .fb.blue { fill: rgba(76,141,255,.05); stroke: rgba(76,141,255,.45); }
+.fbl { font: 600 11px var(--f-mono); letter-spacing: .12em; fill: var(--dim); text-transform: uppercase; }
+.fbl.red { fill: var(--red2); } .fbl.blue { fill: var(--blue2); }
+.fn rect { fill: var(--panel); stroke: #34407A; stroke-width: 1.4; transition: fill .25s, stroke .25s, filter .25s; }
+.fn.red rect { stroke: rgba(242,56,90,.75); } .fn.blue rect { stroke: rgba(76,141,255,.75); }
+.fn.on rect { fill: #1B2150; stroke: var(--hi); filter: drop-shadow(0 0 10px rgba(141,182,255,.75)); }
+.fn.red.on rect { fill: #3A1530; stroke: var(--red2); filter: drop-shadow(0 0 12px rgba(242,56,90,.85)); }
+.fn.sel rect { stroke: var(--hi); stroke-width: 2.2; }
+.fn.dim { opacity: .35; }
+.fnt { font: 600 14px var(--f-display); fill: var(--hi); text-anchor: middle; pointer-events: none; }
+.fns { font: 500 11px var(--f-mono); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+.fe { stroke: #34407A; stroke-width: 1.6; fill: none; }
+.fe.on { stroke: var(--red2); stroke-dasharray: 6 6; animation: dash 0.8s linear infinite; }
+.fe.blue.on { stroke: var(--blue2); }
+@keyframes dash { to { stroke-dashoffset: -12; } }
+.pk { fill: #FFC2CD; filter: drop-shadow(0 0 6px #FF4D6A); } .pk.b { fill: #D6E5FF; filter: drop-shadow(0 0 6px #5B9BFF); }
+.gnode circle { transition: r .2s, opacity .2s; }
+
+/* hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: center; padding-top: 12px; }
+.hero h1 { margin: 6px 0 0; font: 700 clamp(64px, 10vw, 132px)/0.95 var(--f-display); letter-spacing: -.045em; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 30px rgba(182,92,255,.25)); }
+.hero .sub { font: 500 clamp(20px, 2.4vw, 28px)/1.25 var(--f-display); color: var(--hi); margin: 6px 0 0; text-wrap: balance; }
+.hero .auth { color: var(--muted); margin: 0; font-size: 15px; }
+.hero .q { font: 500 19px/1.4 var(--f-display); color: var(--hi); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 16px 18px; box-shadow: 0 0 40px rgba(242,56,90,.15); margin: 0; }
+.herocv { position: relative; aspect-ratio: 1 / 1; max-width: 100%; width: 100%; max-height: 560px; }
+.herocv::before { content: ""; position: absolute; inset: 6%; border-radius: 50%; background: radial-gradient(circle, rgba(242,56,90,.28), rgba(76,141,255,.10) 45%, transparent 70%); }
+.herocv .cap { position: absolute; left: 0; right: 0; bottom: -4px; text-align: center; font: 500 12px var(--f-mono); color: var(--dim); }
+.route { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.route button { text-align: left; background: rgba(16,20,44,.8); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: border-color .2s, transform .2s; }
+.route button:hover { border-color: var(--red); transform: translateY(-2px); }
+.route .rk { font: 600 11px var(--f-mono); color: var(--red2); letter-spacing: .1em; }
+.route .rt { font: 600 16px var(--f-display); color: var(--hi); }
+.route .rs { font-size: 12.5px; color: var(--muted); }
+
+/* token strip */
+.tokrow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.tk { font: 500 13px var(--f-mono); padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(76,141,255,.45); background: var(--bluebg); color: #D6E5FF; cursor: default; }
+.tk.g { border-color: rgba(242,56,90,.7); background: var(--redbg); color: #FFD0D8; cursor: pointer; box-shadow: 0 0 10px rgba(242,56,90,.25); }
+.tk.g.on { background: var(--red); color: #fff; }
+.tk.m { border-style: dashed; border-color: rgba(182,92,255,.7); background: rgba(182,92,255,.12); color: #E6D1FF; }
+.pbar { height: 22px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.pbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--grad); box-shadow: 0 0 14px rgba(242,56,90,.7); transition: width .6s cubic-bezier(.2,.7,.2,1); }
+.hbar { display: grid; grid-template-columns: 150px minmax(0,1fr) 64px; gap: 10px; align-items: center; font-size: 13px; }
+.hbar .tr { height: 26px; border-radius: 6px; background: rgba(255,255,255,.03); display: flex; overflow: hidden; }
+.hbar .tr i { display: block; height: 100%; transition: width .5s; }
+
+/* matrix */
+.mx { border-collapse: separate; border-spacing: 3px; font: 500 13px var(--f-mono); }
+.mx td, .mx th { width: 34px; height: 30px; text-align: center; border-radius: 6px; }
+.mx th { color: var(--dim); font-weight: 600; }
+.mx td { background: rgba(255,255,255,.04); color: var(--dim); transition: background .2s, color .2s; }
+.mx td.one { color: var(--hi); background: rgba(76,141,255,.22); }
+.mx tr.hl td { outline: 1px solid rgba(242,56,90,.55); }
+.mx tr.hl td.one { background: var(--red); color: #fff; box-shadow: 0 0 12px rgba(242,56,90,.6); }
+.mx td.col { outline: 1px solid rgba(141,182,255,.55); }
+.hm td.cell { text-align: center; font-family: var(--f-mono); font-weight: 600; border-radius: 6px; min-width: 64px; color: var(--hi); }
+
+/* matching game */
+.match { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.mrow { display: grid; grid-template-columns: 54px minmax(0,1fr); gap: 10px; align-items: center; }
+.mrow .gt { font: 600 14px var(--f-mono); text-align: center; padding: 8px 0; border-radius: 8px; background: var(--redbg); border: 1px solid rgba(242,56,90,.6); color: #FFD0D8; }
+.mrow select { width: 100%; min-width: 0; }
+.mrow.ok select { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.mrow.no select { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+
+/* Q&A */
+details.qa { background: rgba(16,20,44,.85); border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; }
+details.qa summary { cursor: pointer; padding: 12px 0; font: 600 15.5px var(--f-display); color: var(--hi); list-style: none; display: flex; gap: 10px; }
+details.qa summary::before { content: "+"; font-family: var(--f-mono); color: var(--red2); width: 14px; flex: none; }
+details.qa[open] summary::before { content: "−"; }
+details.qa p { margin: 0 0 14px 24px; color: var(--muted); max-width: 80ch; }
+.qmeta { font: 600 11px var(--f-mono); color: var(--dim); letter-spacing: .08em; text-transform: uppercase; margin-left: auto; padding-left: 10px; white-space: nowrap; }
+
+/* overlays */
+#notes { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 100%); background: rgba(9,11,28,.97); border-left: 1px solid var(--line); z-index: 20; overflow-y: auto; padding: calc(18px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 20px; box-shadow: -20px 0 50px rgba(0,0,0,.5); }
+#notes h3 { margin: 4px 0 8px; font: 600 20px var(--f-display); color: var(--hi); }
+#notes .nl { font: 600 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--red2); margin-top: 16px; }
+#notes p { margin: 6px 0; color: var(--fg); font-size: 15px; }
+#notes .meta { font: 500 12px var(--f-mono); color: var(--dim); }
+#notes .q { color: var(--blue2); }
+#notes .ncl { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); }
+#notes .cue { color: var(--violet); font-family: var(--f-mono); font-size: 12.5px; }
+#grid { position: fixed; inset: 0; z-index: 25; background: rgba(5,6,16,.96); overflow-y: auto; padding-left: var(--gut-l); padding-right: var(--gut-r); padding-block: calc(20px + env(safe-area-inset-top, 0px)) calc(30px + env(safe-area-inset-bottom, 0px)); }
+#grid .gh { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-end; max-width: 1280px; margin: 0 auto 18px; }
+#grid h3 { margin: 0; font: 600 26px var(--f-display); color: var(--hi); }
+#grid ol { list-style: none; padding: 0; margin: 0 auto; max-width: 1280px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+#grid li button { width: 100%; height: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+#grid li button:hover { border-color: var(--blue); }
+#grid li.cur button { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 20px rgba(242,56,90,.25); }
+#grid .gk { font: 600 11px var(--f-mono); color: var(--red2); letter-spacing: .08em; text-transform: uppercase; }
+#grid .gt { font: 600 15px var(--f-display); color: var(--hi); }
+#grid .gs { font: 500 11.5px var(--f-mono); color: var(--dim); margin-top: auto; }
+#grid .gsec { grid-column: 1 / -1; font: 600 12px var(--f-mono); color: var(--blue2); letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+#grid .help { max-width: 1280px; margin: 18px auto 0; font: 500 12px var(--f-mono); color: var(--dim); }
+#kc { position: fixed; inset: 0; z-index: 30; background: rgba(5,6,16,.8); display: grid; place-items: center; padding-left: var(--gut-l); padding-right: var(--gut-r); }
+.kcbox { width: min(620px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(242,56,90,.2); max-height: 90%; overflow-y: auto; }
+.kcbox h3 { margin: 0; font: 600 20px/1.3 var(--f-display); color: var(--hi); }
+.kco { display: flex; flex-direction: column; gap: 8px; }
+.kcopt { text-align: left; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2); cursor: pointer; font-size: 15px; }
+.kcopt:hover { border-color: var(--blue); }
+.kcopt.right { border-color: var(--blue); background: var(--bluebg); }
+.kcopt.wrong { border-color: var(--red); background: var(--redbg); }
+.kcf p { margin: 0; color: var(--muted); }
+
+body.present .bar.top .secnav, body.present .bar.top .hide-pres, body.present .crumbbar { display: none; }
+body.present .bar.top { justify-content: space-between; }
+body.present .slide { max-width: 1440px; }
+body.present .sh h2 { font-size: clamp(30px, 3.8vw, 50px); }
+body.present .rail p { font-size: 18px; }
+body.presenter #stage { display: none; }
+body.presenter #notes { position: static; width: 100%; height: 100%; box-shadow: none; border: 0; grid-row: 3; }
+body.presenter #notes .ncl { display: none; }
+
+@media (max-width: 1100px) { .hide-md { display: none !important; } }
+@media (max-width: 860px) {
+  .split, .split.even, .hero { grid-template-columns: minmax(0, 1fr); }
+  .route { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bar.top { flex-wrap: wrap; }
+  .secnav { order: 3; flex-basis: 100%; }
+  .hide-sm { display: none !important; }
+  .hbar { grid-template-columns: 96px minmax(0,1fr) 52px; }
+  .herocv { max-height: 380px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+<div id="app">
+  <header class="bar top">
+    <button class="brand" id="brand" type="button" aria-label="GraphGPT Walkthrough, go to start"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GRAPHGPT</button>
+    <nav id="secnav" class="secnav" aria-label="Sections"></nav>
+    <div class="bar-r">
+      <div class="seg hide-sm hide-pres" role="group" aria-label="Depth"><button class="btn" type="button" data-mode="overview">Overview</button><button class="btn" type="button" data-mode="detail">Detail</button></div>
+      <button class="btn hide-pres" id="btnCheck" type="button">Check</button>
+      <button class="btn" id="btnGrid" type="button">Chapters</button>
+      <button class="btn" id="btnNotes" type="button" aria-pressed="false">Notes</button>
+      <button class="btn hide-md hide-pres" id="btnPres" type="button">Presenter</button>
+      <button class="btn primary hide-sm" id="btnPresent" type="button" aria-pressed="false">Present</button>
+    </div>
+  </header>
+  <div class="crumbbar"><span id="crumb"></span><span id="progTxt" class="mono"></span></div>
+  <main id="stage"></main>
+  <footer class="bar foot">
+    <button class="btn" id="prev" type="button" aria-label="Previous chapter">← Prev</button>
+    <div class="prog" aria-hidden="true"><div id="progFill"></div></div>
+    <span id="count" class="mono"></span>
+    <button class="btn primary" id="next" type="button" aria-label="Next chapter">Next →</button>
+  </footer>
+  <aside id="notes" hidden aria-label="Presenter notes"></aside>
+  <div id="grid" hidden></div>
+  <div id="kc" hidden></div>
+</div>
+<script>
+/* ---- core: shell, navigation, overlays, shared primitives ---- */
+(function () {
+  'use strict';
+  const SCENES = []; window.SCENES = SCENES; window.scene = d => SCENES.push(d);
+  const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const U = { RM }; window.U = U;
+  U.$ = (s, r = document) => r.querySelector(s);
+  U.$$ = (s, r = document) => [...r.querySelectorAll(s)];
+  U.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  U.fmt = (v, d = 0) => Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+  U.sleep = ms => new Promise(r => setTimeout(r, RM ? 0 : ms));
+
+  const KEY = 'graphgpt-walkthrough:v1';
+  const store = (() => { let d = {}; try { d = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { d = {}; } return d; })();
+  store.visited = store.visited || {}; store.checks = store.checks || {};
+  U.save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
+  U.store = store;
+
+  U.canvas = (host, draw) => {
+    const cv = document.createElement('canvas'); cv.style.display = 'block'; host.appendChild(cv);
+    const o = { cv, ctx: cv.getContext('2d'), W: 10, H: 10, draw };
+    const fit = () => {
+      const r = host.getBoundingClientRect(); const d = Math.min(2, window.devicePixelRatio || 1);
+      o.W = Math.max(10, Math.floor(r.width)); o.H = Math.max(10, Math.floor(r.height));
+      cv.width = o.W * d; cv.height = o.H * d; cv.style.width = o.W + 'px'; cv.style.height = o.H + 'px';
+      o.ctx.setTransform(d, 0, 0, d, 0, 0); if (o.draw && o.ready) o.draw();
+    };
+    const ro = new ResizeObserver(fit); ro.observe(host); fit();
+    queueMicrotask(() => { o.ready = true; if (o.draw) o.draw(); });
+    o.destroy = () => ro.disconnect();
+    return o;
+  };
+  U.loop = fn => {
+    let id, on = true;
+    const f = t => { if (!on) return; if (!document.hidden) fn(t / 1000); id = requestAnimationFrame(f); };
+    id = requestAnimationFrame(f);
+    return () => { on = false; cancelAnimationFrame(id); };
+  };
+
+  let uid = 0; const nid = p => (p || 'c') + '-' + (++uid);
+  U.slider = (host, o, cb) => {
+    const id = o.id || nid('r');
+    const w = document.createElement('label'); w.className = 'ctl'; w.htmlFor = id;
+    w.innerHTML = `<span>${o.label}</span><input type="range" id="${id}" min="${o.min}" max="${o.max}" step="${o.step}" value="${o.value}"><output class="mono"></output>`;
+    host.appendChild(w);
+    const inp = w.querySelector('input'), out = w.querySelector('output'); const fmt = o.fmt || (v => v);
+    const upd = fire => { const v = +inp.value; out.textContent = fmt(v); if (fire && cb) cb(v); };
+    inp.addEventListener('input', () => upd(true)); upd(false);
+    return { el: w, get: () => +inp.value, set: (v, fire = true) => { inp.value = v; upd(fire); } };
+  };
+  U.check = (host, o, cb) => {
+    const id = o.id || nid('k');
+    const w = document.createElement('label'); w.className = 'ctl chk'; w.htmlFor = id;
+    w.innerHTML = `<input type="checkbox" id="${id}" ${o.checked ? 'checked' : ''}><span>${o.label}</span>`;
+    host.appendChild(w); const inp = w.querySelector('input');
+    inp.addEventListener('change', () => cb && cb(inp.checked));
+    return { el: w, get: () => inp.checked };
+  };
+  U.btn = (host, label, cb, cls = '') => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + cls; b.innerHTML = label;
+    b.addEventListener('click', cb); host.appendChild(b); return b;
+  };
+  U.seg = (host, opts, value, cb, label) => {
+    const w = document.createElement('div'); w.className = 'seg'; w.setAttribute('role', 'group'); if (label) w.setAttribute('aria-label', label); host.appendChild(w);
+    const bs = opts.map(([v, l]) => { const b = U.btn(w, l, () => set(v, true)); b.dataset.v = v; return b; });
+    const set = (v, fire) => { value = v; bs.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v)))); if (fire && cb) cb(v); };
+    set(value, false);
+    return { el: w, get: () => value, set };
+  };
+  U.tabs = (host, tabs, onSel, initial) => {
+    const w = document.createElement('div'); w.className = 'tabs'; w.setAttribute('role', 'tablist'); host.appendChild(w);
+    const bs = tabs.map(([v, l]) => { const b = U.btn(w, l, () => sel(v)); b.setAttribute('role', 'tab'); b.dataset.v = v; return b; });
+    const sel = v => { bs.forEach(b => b.setAttribute('aria-selected', String(b.dataset.v === v))); onSel(v); };
+    sel(initial || tabs[0][0]); return { sel };
+  };
+  U.tiles = (host, items) => { host.innerHTML = items.map(([l, v, cls, sub]) => `<div class="tile ${cls || ''}"><div class="tl">${l}</div><div class="tv">${v}</div>${sub ? `<div class="ts">${sub}</div>` : ''}</div>`).join(''); };
+
+  /* SVG flow: nodes, connectors, animated packets */
+  const NS = 'http://www.w3.org/2000/svg';
+  U.svg = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  U.flow = (host, spec) => {
+    const [vw, vh] = spec.size; const svg = U.svg('svg', { viewBox: `0 0 ${vw} ${vh}`, class: 'flow', role: 'img', 'aria-label': spec.label || 'Diagram' }, host);
+    const gB = U.svg('g', {}, svg), gE = U.svg('g', {}, svg), gN = U.svg('g', {}, svg), gP = U.svg('g', {}, svg);
+    (spec.boundaries || []).forEach(b => {
+      U.svg('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 14, class: 'fb ' + (b.kind || '') }, gB);
+      const t = U.svg('text', { x: b.x + 14, y: b.y + 22, class: 'fbl ' + (b.kind || '') }, gB); t.textContent = b.label;
+    });
+    const N = {};
+    Object.entries(spec.nodes).forEach(([id, n]) => {
+      const g = U.svg('g', { class: 'fn ' + (n.kind || ''), 'data-id': id, transform: `translate(${n.x},${n.y})` }, gN);
+      const w = n.w || 150, h = n.h || 54;
+      U.svg('rect', { x: -w / 2, y: -h / 2, width: w, height: h, rx: n.round ? h / 2 : 10 }, g);
+      const t = U.svg('text', { x: 0, y: n.sub ? -3 : 5, class: 'fnt' }, g); t.textContent = n.label;
+      if (n.sub) { const s = U.svg('text', { x: 0, y: 15, class: 'fns' }, g); s.textContent = n.sub; }
+      if (spec.onClick) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.setAttribute('aria-label', n.label + (n.sub ? ', ' + n.sub : '')); g.style.cursor = 'pointer'; const f = () => spec.onClick(id); g.addEventListener('click', f); g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); f(); } }); }
+      N[id] = { ...n, w, h, g, t };
+    });
+    const edge = (a, b) => {
+      const A = N[a], B = N[b]; const dx = B.x - A.x, dy = B.y - A.y;
+      const cut = (n, ux, uy) => { const tx = ux ? (n.w / 2) / Math.abs(ux) : Infinity, ty = uy ? (n.h / 2) / Math.abs(uy) : Infinity; const t = Math.min(tx, ty); return [n.x + ux * t, n.y + uy * t]; };
+      const L = Math.hypot(dx, dy) || 1; return [cut(A, dx / L, dy / L), cut(B, -dx / L, -dy / L)];
+    };
+    const E = {};
+    (spec.edges || []).forEach(([a, b, cls]) => { const [p, q] = edge(a, b); E[a + '>' + b] = U.svg('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], class: 'fe ' + (cls || '') }, gE); });
+    const api = {
+      svg, N, E,
+      state(id, cls) { const n = N[id]; if (n) n.g.setAttribute('class', 'fn ' + (n.kind || '') + (cls ? ' ' + cls : '')); },
+      clear() { Object.keys(N).forEach(id => api.state(id, '')); Object.values(E).forEach(e => e.classList.remove('on')); },
+      label(id, txt) { if (N[id]) N[id].t.textContent = txt; },
+      edgeOn(a, b, on = true) { const e = E[a + '>' + b] || E[b + '>' + a]; if (e) e.classList.toggle('on', on); },
+      packet(a, b, cls = 'pk', ms = 700) {
+        return new Promise(res => {
+          if (!N[a] || !N[b] || RM) return res();
+          const [p, q] = edge(a, b); const c = U.svg('circle', { r: 7, class: cls, cx: p[0], cy: p[1] }, gP);
+          const t0 = performance.now();
+          const f = t => { const u = Math.min(1, (t - t0) / ms); const e = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; c.setAttribute('cx', p[0] + (q[0] - p[0]) * e); c.setAttribute('cy', p[1] + (q[1] - p[1]) * e); if (u < 1 && c.isConnected) requestAnimationFrame(f); else { c.remove(); res(); } };
+          requestAnimationFrame(f);
+        });
+      }
+    };
+    return api;
+  };
+
+  /* stepper over a list of steps */
+  U.stepper = (host, opts) => {
+    let i = -1, playing = false, timer = null, busy = false, dead = false, pending = null;
+    const bar = document.createElement('div'); bar.className = 'controls'; host.appendChild(bar);
+    const bPlay = U.btn(bar, '▶ Play', () => toggle(), 'primary');
+    U.btn(bar, 'Back', () => { stop(); go((pending ? pending[0] : i) - 1, false); });
+    U.btn(bar, 'Next step', () => { stop(); go((pending ? pending[0] : i) + 1, true); });
+    U.btn(bar, 'Restart', () => { stop(); go(0, true); });
+    const pos = document.createElement('span'); pos.className = 'mono c-dim stepn'; bar.appendChild(pos);
+    const go = async (k, anim) => {
+      const n = opts.count; k = U.clamp(k, 0, n - 1); if (busy) { pending = [k, anim]; return; } i = k; pos.textContent = `step ${i + 1} / ${n}`;
+      busy = true; try { await opts.render(i, anim && !RM); } finally { busy = false; }
+      if (dead) return;
+      if (pending) { const [pk, pa] = pending; pending = null; return go(pk, pa); }
+      if (playing) { if (i < n - 1) timer = setTimeout(() => go(i + 1, true), opts.autoMs || 900); else stop(); }
+    };
+    const stop = () => { playing = false; clearTimeout(timer); bPlay.textContent = '▶ Play'; };
+    const toggle = () => { if (playing) return stop(); playing = true; bPlay.textContent = '❚❚ Pause'; if (i >= opts.count - 1) go(0, true); else go(i + 1, true); };
+    return { go, stop, destroy() { dead = true; stop(); } };
+  };
+
+  /* depth mode */
+  const modeHandlers = new Set();
+  U.mode = () => store.mode === 'detail' ? 'detail' : 'overview';
+  U.onMode = fn => { modeHandlers.add(fn); return () => modeHandlers.delete(fn); };
+  const applyMode = () => { document.body.classList.toggle('eng', U.mode() === 'detail'); U.$$('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === U.mode()))); modeHandlers.forEach(f => { try { f(U.mode()); } catch (e) { console.error(e); } }); };
+  U.setMode = m => { store.mode = m; U.save(); applyMode(); };
+
+  /* shell */
+  const SECTIONS = [['intro', 'Start'], ['bg', 'Background'], ['prob', 'Problem'], ['meth', 'Method'], ['exp', 'Experiments'], ['concl', 'Conclusion'], ['lab', 'Lab'], ['ref', 'Backup & Q&A']];
+  U.SECTIONS = SECTIONS;
+  const st = { i: 0 }; let cleanup = null; let sceneModeOff = [];
+  const presenter = /^#presenter/.test(location.hash);
+  let chan = null; try { chan = new BroadcastChannel('graphgpt-walkthrough'); } catch (e) { chan = null; }
+
+  function show(idx, broadcast = true) {
+    idx = U.clamp(idx, 0, SCENES.length - 1); st.i = idx; const s = SCENES[idx];
+    if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
+    sceneModeOff.forEach(f => f()); sceneModeOff = [];
+    const stage = U.$('#stage'); stage.innerHTML = '';
+    if (!presenter) {
+      const sec = document.createElement('section'); sec.className = 'slide' + (s.cls ? ' ' + s.cls : ''); sec.setAttribute('aria-label', s.short || s.title);
+      const head = s.bare ? '' : `<header class="sh"><div class="kicker">${s.ch != null ? `Chapter ${s.ch} · ` : ''}${s.kicker || ''}</div><h2>${s.title}</h2>${s.dq ? `<p class="dq">${s.dq}</p>` : ''}</header>`;
+      const foot = (s.notice || s.myth || s.src) ? `<footer class="sf">${s.notice ? `<div class="notice"><span>Look for</span><div>${s.notice}</div></div>` : ''}${s.myth ? `<div class="notice myth"><span>Misreading</span><div>${s.myth}</div></div>` : ''}${s.src ? `<div class="notice"><span>Source</span><div class="src">${s.src}</div></div>` : ''}</footer>` : '';
+      sec.innerHTML = head + `<div class="sb">${s.html || ''}</div>` + foot;
+      stage.appendChild(sec); stage.scrollTop = 0;
+      const prevOn = U.onMode; U.onMode = fn => { const off = prevOn(fn); sceneModeOff.push(off); return off; };
+      try { cleanup = s.mount ? s.mount(sec.querySelector('.sb'), sec) : null; } catch (e) { console.error('mount failed', s.id, e); }
+      U.onMode = prevOn;
+    }
+    store.visited[s.id] = 1; store.last = s.id; U.save();
+    chrome(); notes();
+    try { history.replaceState(null, '', '#' + (presenter ? 'presenter-' : '') + s.id); } catch (e) {}
+    if (broadcast && chan) chan.postMessage({ t: 'go', id: s.id });
+  }
+  const go = d => show(st.i + d);
+  const goId = id => { const k = SCENES.findIndex(s => s.id === id); if (k >= 0) show(k, false); };
+  U.goId = id => { const k = SCENES.findIndex(s => s.id === id); if (k >= 0) show(k); };
+
+  function renderProgress() {
+    const v = SCENES.filter(s => store.visited[s.id]).length, c = SCENES.filter(s => s.check && store.checks[s.id] === true).length, n = SCENES.filter(s => s.check).length;
+    U.$('#progTxt').textContent = `${v}/${SCENES.length} visited · ${c}/${n} checks`;
+  }
+  function chrome() {
+    const s = SCENES[st.i];
+    U.$('#crumb').textContent = (s.ch != null ? `Ch ${s.ch} · ` : '') + (s.short || s.title) + (s.time ? `  ·  talk ${s.time}` : '');
+    U.$('#count').textContent = `${st.i + 1} / ${SCENES.length}`;
+    U.$('#progFill').style.width = ((st.i + 1) / SCENES.length * 100) + '%';
+    U.$$('#secnav button').forEach(b => b.setAttribute('aria-current', String(b.dataset.sec === s.section)));
+    const kb = U.$('#btnCheck'); kb.hidden = !s.check; kb.textContent = store.checks[s.id] === true ? 'Check ✓' : 'Check';
+    U.$('#prev').disabled = st.i === 0; U.$('#next').disabled = st.i === SCENES.length - 1;
+    renderProgress();
+  }
+  function notes() {
+    const box = U.$('#notes'); const s = SCENES[st.i]; const n = s.notes || {}; const nx = SCENES[st.i + 1];
+    const P = a => (Array.isArray(a) ? a : [a]).filter(Boolean).map(x => `<p>${x.replace(/\[([^\]]+)\]/g, '<span class="cue">[$1]</span>')}</p>`).join('');
+    box.innerHTML = `<button class="btn ncl" type="button" id="notesClose">Close</button><div class="meta">Scene ${st.i + 1}/${SCENES.length}${s.time ? ' · talk ' + s.time : ''}</div>
+      <h3>${s.short || s.title}</h3>
+      ${n.say ? `<div class="nl">Say</div>${P(n.say)}` : '<p class="meta">No script for this scene. It is reference material for questions.</p>'}
+      ${n.transition ? `<div class="nl">Transition</div><p>${n.transition}</p>` : ''}
+      ${n.ask ? `<div class="nl">Likely question</div><p class="q">${n.ask}</p>` : ''}
+      ${n.answer ? `<div class="nl">Answer</div><p>${n.answer}</p>` : ''}
+      ${n.source ? `<div class="nl">Source</div><p class="meta">${n.source}</p>` : ''}
+      ${nx ? `<div class="nl">Next</div><p class="meta">${nx.short || nx.title}</p>` : ''}`;
+    const c = U.$('#notesClose', box); if (c) c.onclick = () => toggleNotes(false);
+  }
+  function grid(open, filter) {
+    const g = U.$('#grid'); g.hidden = !open; if (!open) return;
+    const list = filter === 'lab' ? SCENES.filter(s => s.lab) : SCENES;
+    let lastSec = null;
+    const items = list.map(s => {
+      const k = SCENES.indexOf(s); let sh = '';
+      if (filter !== 'lab' && s.section !== lastSec) { lastSec = s.section; const L = SECTIONS.find(x => x[0] === s.section); sh = `<li class="gsec">${L ? L[1] : ''}</li>`; }
+      return sh + `<li class="${k === st.i ? 'cur' : ''}"><button type="button" data-id="${s.id}"><span class="gk">${s.ch != null ? 'Chapter ' + s.ch : (s.kicker || '')}${s.time ? ' · ' + s.time : ''}</span><span class="gt">${s.short || s.title}</span>${filter === 'lab' ? `<span class="c-muted" style="font-size:13px">${s.lab}</span>` : ''}<span class="gs">${store.visited[s.id] ? '<span class="c-blue">visited</span>' : 'not yet'}${s.check ? (store.checks[s.id] === true ? ' · <span class="c-blue">check passed</span>' : ' · has a check') : ''}${s.lab ? ' · <span class="c-red">interactive</span>' : ''}</span></button></li>`;
+    }).join('');
+    g.innerHTML = `<div class="gh"><div><h3>${filter === 'lab' ? 'Lab: every interactive piece' : 'All chapters'}</h3><p class="c-muted" style="margin:4px 0 0">${filter === 'lab' ? 'Each experiment works on its own.' : 'Jump anywhere. Progress is kept in this browser only.'}</p></div>
+      <div class="controls">${filter === 'lab' ? '<button class="btn" type="button" id="gAll">All chapters</button>' : '<button class="btn" type="button" id="gLab">Lab only</button>'}<button class="btn" type="button" id="gReset">Reset progress</button><button class="btn primary" type="button" id="gClose">Close (Esc)</button></div></div>
+      <ol>${items}</ol>
+      <div class="help">← → or Space: move · G chapters · L lab · N notes · K check · D overview/detail · F present · P presenter window · Esc close</div>`;
+    U.$('#gClose', g).onclick = () => grid(false);
+    const gl = U.$('#gLab', g), ga = U.$('#gAll', g); if (gl) gl.onclick = () => grid(true, 'lab'); if (ga) ga.onclick = () => grid(true);
+    let armed = false; const rb = U.$('#gReset', g);
+    rb.onclick = () => { if (!armed) { armed = true; rb.textContent = 'Click again to reset'; return; } store.visited = {}; store.checks = {}; U.save(); grid(true, filter); chrome(); };
+    U.$$('li button[data-id]', g).forEach(b => b.onclick = () => { grid(false); U.goId(b.dataset.id); });
+    const first = U.$('li.cur button', g) || U.$('li button', g); if (first) first.focus();
+  }
+  function knowledge(open) {
+    const m = U.$('#kc'); const s = SCENES[st.i];
+    if (!open || !s.check) { m.hidden = true; return; }
+    const c = s.check; m.hidden = false;
+    m.innerHTML = `<div class="kcbox" role="dialog" aria-modal="true" aria-labelledby="kcq"><div class="kicker">Knowledge check${s.ch != null ? ' · Chapter ' + s.ch : ''}</div>
+      <h3 id="kcq">${c.q}</h3><div class="kco">${c.opts.map((o, i) => `<button type="button" class="kcopt" data-i="${i}">${o}</button>`).join('')}</div><div class="kcf" aria-live="polite"></div>
+      <div class="controls" style="justify-content:flex-end"><button class="btn" type="button" id="kcClose">Close</button></div></div>`;
+    U.$$('.kcopt', m).forEach(b => b.onclick = () => {
+      const i = +b.dataset.i, right = i === c.a; store.checks[s.id] = store.checks[s.id] === true ? true : right; U.save();
+      U.$$('.kcopt', m).forEach(x => x.classList.remove('right', 'wrong'));
+      b.classList.add(right ? 'right' : 'wrong');
+      U.$('.kcf', m).innerHTML = `<p><b class="${right ? 'c-blue' : 'c-red'}">${right ? 'Correct.' : 'Not quite.'}</b> ${right ? c.why : (c.hints && c.hints[i]) || 'Look at the diagram again and try another answer.'}</p>`;
+      chrome();
+    });
+    U.$('#kcClose', m).onclick = () => knowledge(false);
+    m.onclick = e => { if (e.target === m) knowledge(false); };
+    U.$('.kcopt', m).focus();
+  }
+  function toggleNotes(v) { const n = U.$('#notes'); n.hidden = v === undefined ? !n.hidden : !v; U.$('#btnNotes').setAttribute('aria-pressed', String(!n.hidden)); }
+  function present(v) {
+    const on = v === undefined ? !document.body.classList.contains('present') : v;
+    document.body.classList.toggle('present', on); const b = U.$('#btnPresent'); b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Exit' : 'Present';
+    try { if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) {}
+  }
+  function presenterWindow() {
+    let w = null; try { w = window.open(location.pathname + '#presenter-' + SCENES[st.i].id, 'graphgpt-presenter', 'width=760,height=900'); } catch (e) {}
+    if (!w) { toggleNotes(true); U.$('#notes').insertAdjacentHTML('afterbegin', '<p class="meta" style="margin-right:70px">This viewer can’t open a second window, so the notes are shown here instead.</p>'); }
+  }
+
+  function boot() {
+    if (presenter) { document.body.classList.add('presenter'); toggleNotes(true); }
+    const nav = U.$('#secnav');
+    SECTIONS.forEach(([k, l]) => { const b = U.btn(nav, l, () => { if (k === 'lab') return grid(true, 'lab'); const s = SCENES.find(x => x.section === k); if (s) U.goId(s.id); }); b.className = ''; b.dataset.sec = k; });
+    U.$$('[data-mode]').forEach(b => b.onclick = () => U.setMode(b.dataset.mode));
+    U.$('#brand').onclick = () => show(0);
+    U.$('#prev').onclick = () => go(-1); U.$('#next').onclick = () => go(1);
+    U.$('#btnNotes').onclick = () => toggleNotes();
+    U.$('#btnGrid').onclick = () => grid(U.$('#grid').hidden);
+    U.$('#btnCheck').onclick = () => knowledge(true);
+    U.$('#btnPresent').onclick = () => present();
+    U.$('#btnPres').onclick = presenterWindow;
+    document.addEventListener('keydown', e => {
+      const tg = e.target; const typing = tg && (tg.tagName === 'INPUT' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA');
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape') { if (!U.$('#kc').hidden) return knowledge(false); if (!U.$('#grid').hidden) return grid(false); if (!presenter && !U.$('#notes').hidden) return toggleNotes(false); if (document.body.classList.contains('present')) present(false); return; }
+      if (!U.$('#kc').hidden || !U.$('#grid').hidden) return;
+      if (typing) return;
+      if (['ArrowRight', 'PageDown'].includes(e.key) || (e.key === ' ' && tg.tagName !== 'BUTTON' && tg.tagName !== 'SUMMARY')) { e.preventDefault(); go(1); }
+      else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); go(-1); }
+      else if (e.key === 'Home') show(0); else if (e.key === 'End') show(SCENES.length - 1);
+      else if (e.key === 'n' || e.key === 'N') toggleNotes();
+      else if (e.key === 'g' || e.key === 'G') grid(true);
+      else if (e.key === 'l' || e.key === 'L') grid(true, 'lab');
+      else if (e.key === 'k' || e.key === 'K') knowledge(true);
+      else if (e.key === 'd' || e.key === 'D') U.setMode(U.mode() === 'detail' ? 'overview' : 'detail');
+      else if (e.key === 'f' || e.key === 'F') present();
+      else if (e.key === 'p' || e.key === 'P') presenterWindow();
+    });
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('present')) present(false); });
+    if (chan) chan.onmessage = ev => { const m = ev.data || {}; if (m.t === 'go') goId(m.id); };
+    window.addEventListener('hashchange', () => { const h = location.hash.replace(/^#(presenter-?)?/, ''); if (h && SCENES[st.i] && SCENES[st.i].id !== h) goId(h); });
+    applyMode();
+    const h = location.hash.replace(/^#(presenter-?)?/, '');
+    let k = SCENES.findIndex(s => s.id === h);
+    if (k < 0 && store.last) k = SCENES.findIndex(s => s.id === store.last);
+    if (k < 0) k = 0;
+    show(k, false);
+  }
+  U.boot = boot;
+})();
+/* ---- scenes: start, background, problem ---- */
+(function () {
+  const { $, $$ } = U;
+
+  /* ---------- hero ---------- */
+  scene({
+    id: 'start', section: 'intro', bare: true, short: 'GraphGPT', title: 'GraphGPT', time: '0:00–0:30',
+    html: `<div class="hero">
+      <div class="rail" style="gap:16px">
+        <div class="kicker">CS 579 · Social Graphs · SIGIR 2024</div>
+        <h1>GraphGPT</h1>
+        <p class="sub">Graph Instruction Tuning for Large Language Models</p>
+        <p class="auth">Tang, Yang, Wei, Shi, Su, Cheng, Yin, Huang · University of Hong Kong and Baidu</p>
+        <p class="q">Can a language model use the citation graph around a paper, and not just its abstract, on a dataset it never trained on?</p>
+        <div class="controls"><button class="btn primary" type="button" id="hGo">Start the walkthrough →</button><button class="btn" type="button" id="hGrid">See all chapters</button><button class="btn" type="button" id="hLab">Jump to the lab</button></div>
+      </div>
+      <div class="herocv" id="hcv"><div class="cap">Live: one paper (red) and its 103-node, 2-hop neighborhood passing messages inward</div></div>
+    </div>
+    <div class="route" id="route"></div>
+    <div class="callout blue" style="font-size:14px">This site follows the 18-minute talk. Use <b>Notes</b> for the speaker script, <b>Present</b> for full screen, and <b>Detail</b> to show notation caveats and extra arithmetic. Arrow keys move between chapters.</div>`,
+    mount(sb) {
+      $('#hGo', sb).onclick = () => U.goId('graphs');
+      $('#hGrid', sb).onclick = () => $('#btnGrid').click();
+      $('#hLab', sb).onclick = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }));
+      const R = [['bg', 'Background', 'Graphs, GNNs, and why prose is expensive'], ['prob', 'Problem', 'Frozen LLM, new graph, no target labels'], ['meth', 'Method', 'Architecture, then five deep dives'], ['exp', 'Experiments', 'Table 1 and the ablations, checked'], ['concl', 'Conclusion', 'What holds up and what is open']];
+      $('#route', sb).innerHTML = R.map(([k, t, s], i) => `<button type="button" data-k="${k}"><span class="rk">0${i + 1}</span><span class="rt">${t}</span><span class="rs">${s}</span></button>`).join('');
+      $$('#route button', sb).forEach(b => b.onclick = () => { const s = SCENES.find(x => x.section === b.dataset.k); if (s) U.goId(s.id); });
+      // animated 2-hop neighborhood: 1 + 12 + 90 = 103 nodes
+      let sd = 11; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      const N = [{ x: 0, y: 0, l: 0, p: -1 }], E = []; const F = 12, per = [8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7];
+      for (let i = 0; i < F; i++) { const a = 2 * Math.PI * i / F; N.push({ x: Math.cos(a) * .37, y: Math.sin(a) * .37, l: 1, a, p: 0 }); E.push([0, i + 1]); }
+      for (let i = 0; i < F; i++) { const P = N[i + 1]; for (let j = 0; j < per[i]; j++) { const a = P.a + (j - (per[i] - 1) / 2) * 0.072; const rr = .71 + (rnd() - .5) * .12; N.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr, l: 2, p: i + 1 }); E.push([i + 1, N.length - 1]); } }
+      const M = []; let glow = 0, rot = 0;
+      const spawn = () => { const k = 13 + Math.floor(rnd() * 90); M.push({ from: k, to: N[k].p, t: 0, sp: 0.006 + rnd() * 0.006, c: 0 }); };
+      const step = () => { for (let i = M.length - 1; i >= 0; i--) { const m = M[i]; m.t += m.sp; if (m.t >= 1) { M.splice(i, 1); if (m.to === 0) glow = Math.min(1, glow + .35); else M.push({ from: m.to, to: 0, t: 0, sp: .012, c: 1 }); } } glow *= .97; if (rnd() < .22) spawn(); };
+      const cv = U.canvas($('#hcv', sb), () => draw());
+      function draw() {
+        const { ctx: g, W, H } = cv; g.clearRect(0, 0, W, H); const S = Math.min(W, H) / 2 * .98, cx = W / 2, cy = H / 2 - 8;
+        const cs = Math.cos(rot), sn = Math.sin(rot); const P = n => [cx + (n.x * cs - n.y * sn) * S, cy + (n.x * sn + n.y * cs) * S];
+        g.lineCap = 'round';
+        for (const [a, b] of E) { const A = P(N[a]), B = P(N[b]); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); if (a === 0) { g.strokeStyle = 'rgba(255,90,115,0.75)'; g.lineWidth = 2.2; } else { g.strokeStyle = 'rgba(110,150,255,0.30)'; g.lineWidth = 1.1; } g.stroke(); }
+        const r = S / 270;
+        for (const n of N) { if (n.l !== 2) continue; const p = P(n); g.beginPath(); g.arc(p[0], p[1], 4.2 * r, 0, 7); g.fillStyle = '#8DB6FF'; g.shadowColor = '#4C8DFF'; g.shadowBlur = 8; g.fill(); }
+        for (const n of N) { if (n.l !== 1) continue; const p = P(n); g.beginPath(); g.arc(p[0], p[1], 10 * r, 0, 7); g.fillStyle = '#4C8DFF'; g.shadowColor = '#4C8DFF'; g.shadowBlur = 18; g.fill(); }
+        for (const m of M) { const A = P(N[m.from]), B = P(N[m.to]); const x = A[0] + (B[0] - A[0]) * m.t, y = A[1] + (B[1] - A[1]) * m.t; g.beginPath(); g.arc(x, y, (m.c ? 4 : 3) * r, 0, 7); g.fillStyle = m.c ? '#FFB3C0' : '#CFE0FF'; g.shadowColor = m.c ? '#FF4D6A' : '#5B9BFF'; g.shadowBlur = 14; g.fill(); }
+        const C = P(N[0]); g.beginPath(); g.arc(C[0], C[1], (24 + glow * 6) * r, 0, 7); g.fillStyle = '#F2385A'; g.shadowColor = '#FF4D6A'; g.shadowBlur = 30 + glow * 40; g.fill(); g.shadowBlur = 0;
+      }
+      for (let i = 0; i < 40; i++) spawn(); for (let i = 0; i < 60; i++) step(); draw();
+      const stop = U.RM ? () => {} : U.loop(() => { rot += .0009; step(); draw(); });
+      return () => { stop(); cv.destroy(); };
+    },
+    notes: {
+      say: ['[Let the animation run for a second before speaking]', 'Hi everyone. This is GraphGPT, from the University of Hong Kong and Baidu, at SIGIR 2024.', '[Point to the red node] The red dot is one paper; the blue dots are its neighborhood. Can a language model use this picture, not just the abstract, on a dataset it never trained on?'],
+      transition: 'First, what does a graph like this give us that the text doesn’t?',
+      ask: 'Is this the same as prompting ChatGPT with the graph?', answer: 'No. Earlier work writes the graph out as text. GraphGPT feeds learned graph embeddings in as tokens.',
+      source: 'Title page; abstract. Animation is illustrative (103 nodes matches §4.6).'
+    }
+  });
+
+  /* ---------- ch1 graphs ---------- */
+  const PN = [
+    { id: 0, x: 200, y: 160, lab: 'TiM-DNN', c: '?' },
+    { id: 1, x: 70, y: 70, lab: 'P1', c: 'cs.LG' }, { id: 2, x: 330, y: 70, lab: 'P2', c: 'cs.LG' },
+    { id: 3, x: 345, y: 245, lab: 'P3', c: 'cs.AR' }, { id: 4, x: 60, y: 250, lab: 'P4', c: 'cs.LG' },
+    { id: 5, x: 470, y: 140, lab: 'P5', c: 'cs.LG' }];
+  const PE = [[0, 1], [0, 2], [0, 3], [4, 0], [5, 2]];
+  scene({
+    id: 'graphs', section: 'bg', ch: 1, kicker: 'Background · graphs', short: 'Citation graphs', time: '0:30–1:30',
+    title: 'A citation network is a graph whose nodes carry text',
+    dq: 'What does the graph know about a paper that its title doesn’t?',
+    lab: 'Hover nodes to read the adjacency matrix; let the neighbors vote.',
+    html: `<div class="split">
+      <div class="rail">
+        <p class="lede">The paper writes a graph as <span class="mono c-violet">𝒢 = (𝒱, ℰ, A, X)</span>: nodes, edges, an adjacency matrix and node features.</p>
+        <p>Here each node is a paper and each edge a citation, so edges have a direction. <b>A</b> is N × N: row <i>i</i>, column <i>j</i> is 1 if paper <i>i</i> cites paper <i>j</i>. <b>X</b> is N × f: one vector per paper, built from its title and abstract. That is what makes this a <b>text-attributed graph</b>.</p>
+        <p>P0 is the paper’s own running example, <b>TiM-DNN</b>, an in-memory accelerator. Its title reads like hardware (cs.AR). Its true label is machine learning (cs.LG). In this sketch most neighbors are ML papers, so the graph carries evidence the title doesn’t.</p>
+        <div id="gTabs"></div><div id="gTask" class="card"></div>
+        <div class="callout eng-only">The paper calls OGB-arxiv directed but never says whether the encoder symmetrizes edges. Eq. 2 just uses A + I.</div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>Hover or tab to a paper</div>
+        <div class="split even" style="gap:16px;align-items:center">
+          <div id="gSvg"></div>
+          <div class="tw"><table class="mx" id="gMx"></table><p class="src" style="margin:8px 0 0">A: row = citing paper, column = cited paper</p></div>
+        </div>
+        <div class="controls" id="gCtl"></div>
+        <div id="gVote" class="tiles"></div>
+      </div></div>`,
+    src: 'Notation from §2 · TiM-DNN from Fig. 1 and Table 6 · neighbor labels are made up for illustration',
+    notice: 'Row P0 has three ones because P0 cites P1, P2 and P3. P4 cites P0, so that 1 sits in row P4.',
+    mount(sb) {
+      const svg = U.svg('svg', { viewBox: '0 0 520 310', class: 'flow', role: 'img', 'aria-label': 'Six-paper citation graph' }, $('#gSvg', sb));
+      const defs = U.svg('defs', {}, svg); const mk = U.svg('marker', { id: 'arw', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs); U.svg('path', { d: 'M0 0L10 5L0 10z', fill: '#5B6BAA' }, mk);
+      const mk2 = U.svg('marker', { id: 'arwr', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs); U.svg('path', { d: 'M0 0L10 5L0 10z', fill: '#FF6B84' }, mk2);
+      const EL = PE.map(([a, b]) => { const A = PN[a], B = PN[b]; const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy); const ra = a === 0 ? 34 : 22, rb = b === 0 ? 36 : 24; return U.svg('line', { x1: A.x + dx / L * ra, y1: A.y + dy / L * ra, x2: B.x - dx / L * rb, y2: B.y - dy / L * rb, stroke: '#5B6BAA', 'stroke-width': 1.8, 'marker-end': 'url(#arw)' }, svg); });
+      const showLab = { v: true };
+      const NG = PN.map(n => {
+        const g = U.svg('g', { class: 'gnode', tabindex: 0, role: 'button', 'aria-label': n.lab + (n.id ? ', label ' + n.c : ', the target paper') }, svg); g.style.cursor = 'pointer';
+        U.svg('circle', { cx: n.x, cy: n.y, r: n.id ? 20 : 30, fill: n.id ? '#1B2B5E' : '#F2385A', stroke: n.id ? '#4C8DFF' : '#FF9AAB', 'stroke-width': 2, style: `filter:drop-shadow(0 0 ${n.id ? 6 : 14}px ${n.id ? '#4C8DFF' : '#F2385A'})` }, g);
+        const t = U.svg('text', { x: n.x, y: n.y + 4, 'text-anchor': 'middle', fill: '#F6F7FD', style: 'font:600 12px var(--f-mono)' }, g); t.textContent = n.id ? 'P' + n.id : 'P0';
+        const c = U.svg('text', { x: n.x, y: n.y + (n.id ? 38 : 50), 'text-anchor': 'middle', fill: n.id ? '#8DB6FF' : '#FF9AAB', style: 'font:500 11.5px var(--f-mono)' }, g); c.textContent = n.id ? n.c : 'TiM-DNN · label ?';
+        g.addEventListener('mouseenter', () => hl(n.id)); g.addEventListener('focus', () => hl(n.id)); g.addEventListener('click', () => hl(n.id));
+        return { g, c, n };
+      });
+      const mx = $('#gMx', sb);
+      mx.innerHTML = '<tr><th></th>' + PN.map((_, j) => `<th>${j}</th>`).join('') + '</tr>' + PN.map((_, i) => `<tr data-r="${i}"><th>P${i}</th>${PN.map((_, j) => { const one = PE.some(([a, b]) => a === i && b === j); return `<td data-c="${j}" class="${one ? 'one' : ''}">${one ? 1 : 0}</td>`; }).join('')}</tr>`).join('');
+      function hl(k) {
+        $$('tr', mx).forEach(r => r.classList.toggle('hl', +r.dataset.r === k));
+        $$('td', mx).forEach(td => td.classList.toggle('col', +td.dataset.c === k));
+        PE.forEach(([a, b], i) => { const on = a === k || b === k; EL[i].setAttribute('stroke', on ? '#FF6B84' : '#5B6BAA'); EL[i].setAttribute('stroke-width', on ? 2.6 : 1.8); EL[i].setAttribute('marker-end', on ? 'url(#arwr)' : 'url(#arw)'); });
+      }
+      hl(0);
+      const ctl = $('#gCtl', sb);
+      U.check(ctl, { label: 'Show neighbor labels', checked: true, id: 'g-lab' }, v => { NG.forEach(o => { if (o.n.id) o.c.style.opacity = v ? 1 : 0; }); vote(); showLab.v = v; });
+      function vote() {
+        const nb = [...new Set(PE.filter(([a, b]) => a === 0 || b === 0).map(([a, b]) => a === 0 ? b : a))];
+        const lg = nb.filter(i => PN[i].c === 'cs.LG').length, ar = nb.length - lg;
+        U.tiles($('#gVote', sb), [['Title alone says', 'cs.AR', 'red', 'what ChatGPT answered (Fig. 1a)'], ['1-hop neighbors', `${nb.length} papers`, '', 'P1, P2, P3 cited · P4 cites P0'], ['Neighbor vote', `${lg} : ${ar}`, 'blue', 'cs.LG : cs.AR in this sketch'], ['True label', 'cs.LG', 'blue', 'Table 6']]);
+      }
+      vote();
+      U.tabs($('#gTabs', sb), [['nc', 'Node classification'], ['lp', 'Link prediction']], v => {
+        $('#gTask', sb).innerHTML = v === 'nc' ? '<h4>What is P0’s category?</h4><p>Predict one label per node. On Arxiv that is one of 40 CS sub-categories. This is the main task in the paper.</p>' : '<h4>Does P0 cite P3?</h4><p>Predict whether an edge exists between two nodes. Reported with AUC and AP in Table 3 (backup).</p>';
+      });
+    },
+    check: { q: 'In the adjacency matrix A, where is the 1 that records “P4 cites P0”?', opts: ['Row P0, column 4', 'Row P4, column 0', 'Both cells, because citations are symmetric'], a: 1, why: 'Rows are the citing paper and columns the cited paper, so the entry is A[4][0].', hints: ['That cell would mean P0 cites P4.', 'Citations have a direction. The paper doesn’t say whether the encoder symmetrizes them.'] },
+    notes: {
+      say: ['The paper writes a graph as nodes, edges, an adjacency matrix A, and node features X.', '[Point to the diagram] Here each node is a paper and each edge a citation, so edges have a direction. [Point to the matrix] A records them: row zero has three ones because P0 cites P1, P2 and P3. X gives every paper a vector from its title and abstract, which is why this is a text-attributed graph.', '[Point to P0] P0 is the paper’s own example, TiM-DNN, an in-memory accelerator. The title says hardware; the real label is machine learning. In my sketch the neighbors are mostly ML, so the graph carries evidence the title doesn’t.', 'The two tasks: classify a node, or predict a link.'],
+      transition: 'The standard way to use that neighbor evidence is a graph neural network.',
+      ask: 'Does GraphGPT treat edges as directed?', answer: 'The paper calls OGB-arxiv directed but never says whether the encoder symmetrizes edges. Eq. 2 just uses A + I.',
+      source: '§2; TiM-DNN from Fig. 1 and Table 6. Neighbor labels are illustrative.'
+    }
+  });
+
+  /* ---------- ch2 GNN ---------- */
+  scene({
+    id: 'gnn', section: 'bg', ch: 2, kicker: 'Background · GNNs', short: 'Message passing', time: '1:30–2:20',
+    title: 'A GNN layer updates each node from its neighbors',
+    dq: 'How does neighbor evidence get into one node’s vector?',
+    lab: 'Step through two layers of message passing and change the self-weight.',
+    html: `<div class="split">
+      <div class="rail">
+        <div class="eq"><span class="tag">EQ. 1</span><i>h</i><sub><i>v</i></sub><sup>(<i>l</i>)</sup> = <span class="r">Aggregate</span><sup>(<i>l</i>)</sup>( <i>h</i><sub><i>v</i></sub><sup>(<i>l</i>−1)</sup>, <span class="b">Propagate</span><sup>(<i>l</i>)</sup>( {<i>h</i><sub><i>u</i></sub><sup>(<i>l</i>−1)</sup> : <i>u</i> ∈ 𝒩(<i>v</i>)} ) )</div>
+        <p><b class="c-blue">Propagate</b> gathers the neighbors’ vectors from the last layer. <b class="c-red">Aggregate</b> mixes that message into <i>v</i>’s own vector.</p>
+        <p class="lede">Stack <i>L</i> layers and <i>v</i> sees <i>L</i> hops out.</p>
+        <p>In layer 1, <i>v</i> hears from u₁–u₃ while the u’s hear from the w’s. In layer 2, <i>v</i> hears from the u’s again, but their vectors now carry the w’s too.</p>
+        <p class="c-muted">An MLP classifies <i>v</i> from <i>v</i>’s own features and ignores the edges. Tick the box to see that.</p>
+        <div class="callout eng-only">Deep GNNs over-smooth: after many layers node vectors converge. GraphGPT instead samples a small subgraph and lets the LLM read it.</div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>Toy numbers · mean aggregation</div>
+        <div id="nFlow"></div><div id="nTiles" class="tiles"></div><div id="nCtl" class="controls"></div><div id="nStep"></div>
+      </div></div>`,
+    src: 'Eq. (1) from §2 · animation and toy numbers made for this site',
+    notice: 'At self-weight 0.5, v starts at 0.2, its neighbors average 0.8, so layer 1 moves v to 0.5.',
+    mount(sb) {
+      const W0 = { v: .2, u1: .9, u2: .8, u3: .7, w1: .6, w2: .9, w3: 1.0 };
+      const f = U.flow($('#nFlow', sb), { size: [620, 300], label: 'Two-hop message passing toward node v', nodes: {
+        v: { x: 90, y: 150, w: 92, h: 50, label: 'v 0.20', kind: 'red', round: 1 },
+        u1: { x: 300, y: 60, w: 92, h: 44, label: 'u₁', kind: 'blue', round: 1 }, u2: { x: 300, y: 150, w: 92, h: 44, label: 'u₂', kind: 'blue', round: 1 }, u3: { x: 300, y: 240, w: 92, h: 44, label: 'u₃', kind: 'blue', round: 1 },
+        w1: { x: 520, y: 60, w: 92, h: 40, label: 'w₁', round: 1 }, w2: { x: 520, y: 150, w: 92, h: 40, label: 'w₂', round: 1 }, w3: { x: 520, y: 240, w: 92, h: 40, label: 'w₃', round: 1 } },
+        edges: [['u1', 'v'], ['u2', 'v'], ['u3', 'v'], ['w1', 'u1'], ['w2', 'u2'], ['w3', 'u3']] });
+      let alpha = .5, mlp = false, layer = 0;
+      const comp = () => {
+        const a = alpha, L = [{ ...W0 }];
+        const nx = p => { const q = { ...p }; if (mlp) return q;
+          q.v = a * p.v + (1 - a) * (p.u1 + p.u2 + p.u3) / 3;
+          ['1', '2', '3'].forEach(k => { q['u' + k] = a * p['u' + k] + (1 - a) * (p.v + p['w' + k]) / 2; q['w' + k] = a * p['w' + k] + (1 - a) * p['u' + k]; });
+          return q; };
+        L.push(nx(L[0])); L.push(nx(L[1])); return L;
+      };
+      const paint = () => {
+        const L = comp(), s = L[layer];
+        Object.keys(W0).forEach(k => f.label(k, (k[0] === 'v' ? 'v ' : k.replace(/(\d)/, m => '₀₁₂₃'[m]) + ' ') + s[k].toFixed(2)));
+        U.tiles($('#nTiles', sb), [['Layer', String(layer), '', layer === 0 ? 'raw features' : layer + (layer === 1 ? ' hop' : ' hops') + ' of context'], ['v now', s.v.toFixed(2), 'red', mlp ? 'MLP: edges ignored' : 'started at 0.20'], ['v sees', layer === 0 ? 'itself' : layer === 1 ? 'u₁–u₃' : 'u’s and w’s', 'blue', ''], ['Message to v', mlp ? '—' : ((L[Math.max(0, layer - 1)].u1 + L[Math.max(0, layer - 1)].u2 + L[Math.max(0, layer - 1)].u3) / 3).toFixed(2), '', 'mean of u’s, last layer']]);
+      };
+      const ctl = $('#nCtl', sb);
+      U.slider(ctl, { label: 'Self-weight α', min: 0, max: 1, step: .05, value: .5, fmt: v => v.toFixed(2), id: 'n-a' }, v => { alpha = v; paint(); });
+      U.check(ctl, { label: 'Use an MLP instead (ignore edges)', id: 'n-mlp' }, v => { mlp = v; paint(); });
+      const sp = U.stepper($('#nStep', sb), { count: 3, autoMs: 700, render: async (i, anim) => {
+        f.clear(); layer = i; if (i === 0) { paint(); return; }
+        if (!mlp) {
+          ['u1', 'u2', 'u3'].forEach(u => f.edgeOn(u, 'v'));
+          if (i === 1) ['1', '2', '3'].forEach(k => f.edgeOn('w' + k, 'u' + k));
+          if (anim) {
+            const ps = ['u1', 'u2', 'u3'].map(u => f.packet(u, 'v', i === 2 ? 'pk' : 'pk b', 800));
+            if (i === 1) ['1', '2', '3'].forEach(k => ps.push(f.packet('w' + k, 'u' + k, 'pk b', 800)));
+            await Promise.all(ps);
+          }
+        }
+        f.state('v', 'on'); paint();
+      } });
+      sp.go(0, false);
+      return () => sp.destroy();
+    },
+    check: { q: 'After two message-passing layers, which nodes have influenced v?', opts: ['Only u₁–u₃', 'u₁–u₃ and w₁–w₃', 'Every node in the graph'], a: 1, why: 'Each layer adds one hop, so two layers reach the w’s through the u’s.', hints: ['That is true after one layer.', 'Only nodes within L hops can reach v after L layers.'] },
+    notes: {
+      say: ['A graph neural network turns that neighbor evidence into a prediction.', '[Point to Eq. 1] Each layer, a node collects its neighbors’ vectors, that’s Propagate, and mixes them into its own, that’s Aggregate.', '[Watch the animation] In layer one, v hears from u1 to u3, while the u’s hear from the w’s. In layer two, v hears from the u’s again, but now their messages carry the w’s too. So layers equal hops.', '[Point to the toy numbers] With averaging, v starts at 0.2, its neighbors average 0.8, and v moves to 0.5. An MLP never does this; it only sees the node itself.'],
+      transition: 'GNNs do this well, so why would we want a language model involved at all?',
+      ask: 'Why not stack many layers?', answer: 'Deep GNNs over-smooth, meaning node vectors converge. GraphGPT instead samples a small subgraph and lets the LLM read it.',
+      source: 'Eq. (1), §2. Animation and toy numbers are illustrative.'
+    }
+  });
+
+  /* ---------- ch3 token cost ---------- */
+  scene({
+    id: 'tokens', section: 'bg', ch: 3, kicker: 'Motivation · Figure 1', short: 'The token bill', time: '2:20–3:20',
+    title: 'Writing the neighborhood out as text costs thousands of tokens',
+    dq: 'If GNNs need retraining for new labels, why not just describe the graph to a language model?',
+    lab: 'Grow the subgraph and watch prose prompts outrun the context window.',
+    html: `<div class="split">
+      <div class="rail">
+        <p class="lede">A GNN’s output layer is tied to one label set. New classes mean retraining. A language model can name any class, but then the graph has to get into the prompt somehow.</p>
+        <p>Figure 1 tries three prompts on TiM-DNN. Text only: ChatGPT says hardware. Add the neighbors as sentences (“Paper 0 cites Paper 1 …”): <b>4,649 tokens</b>, still wrong. GraphGPT passes one vector per node: <b>750 tokens</b>, and cs.LG comes out first.</p>
+        <div class="tiles"><div class="tile red"><div class="tl">Structure as prose</div><div class="tv">≈4,034</div><div class="ts">4,649 − 615 shared text</div></div><div class="tile blue"><div class="tl">Structure as graph tokens</div><div class="tv">≈135</div><div class="ts">750 − 615</div></div><div class="tile"><div class="tl">Ratio</div><div class="tv">≈30×</div><div class="ts">one example, not a benchmark</div></div></div>
+        <div class="callout eng-only">The three prompts also differ slightly in wording, so the split is approximate. Graph tokens still grow about one per node: compact, not constant.</div>
+      </div>
+      <div class="viz"><div class="vtag">Prompt length in tokens · Fig. 1</div>
+        <div id="tBars" style="display:flex;flex-direction:column;gap:12px"></div>
+        <div class="legend"><span style="--c:#3A4479">paper text (shared)</span><span style="--c:var(--red)">structure as prose</span><span style="--c:var(--blue)">structure as graph tokens</span><span style="--c:#B65CFF">4,096-token context of Vicuna-7B-v1.5</span></div>
+        <div class="card"><h4>What if the neighborhood were bigger?</h4><p>Linear extrapolation from this one example: about 39 prose tokens per neighbor versus about 1.3 graph tokens per node.</p><div class="controls" id="tCtl"></div><div id="tEst" class="tiles"></div></div>
+      </div></div>`,
+    src: 'Token counts and answers from Fig. 1 and Table 6 · 103-node subgraph from §4.6 · overhead split and extrapolation are my arithmetic',
+    myth: '“GraphGPT is constant-cost.” It isn’t: one graph token per node means the cost still grows with the subgraph.',
+    mount(sb) {
+      const MAX = 5200;
+      const bars = [['(a) Title + abstract', [[615, '#3A4479']], 'ChatGPT · cs.AR ✗'], ['(b) + neighbors as prose', [[615, '#3A4479'], [4034, 'var(--red)']], 'ChatGPT · cs.AR ✗'], ['(c) GraphGPT graph tokens', [[615, '#3A4479'], [135, 'var(--blue)']], 'GraphGPT · cs.LG first ✓']];
+      $('#tBars', sb).innerHTML = bars.map(([l, segs, ans]) => { const tot = segs.reduce((a, s) => a + s[0], 0); return `<div class="hbar"><span class="c-muted">${l}</span><div class="tr" style="position:relative">${segs.map(s => `<i style="width:${s[0] / MAX * 100}%;background:${s[1]};${s[1].includes('red') ? 'box-shadow:0 0 14px rgba(242,56,90,.6)' : ''}"></i>`).join('')}<b style="position:absolute;left:${4096 / MAX * 100}%;top:-4px;bottom:-4px;width:2px;background:#B65CFF;box-shadow:0 0 8px #B65CFF"></b></div><span class="mono" style="color:var(--hi)">${U.fmt(tot)}</span></div><div class="src" style="margin:-8px 0 0 160px">${ans}</div>`; }).join('');
+      const est = n => { const prose = 615 + 4034 / 102 * (n - 1), gt = 615 + 135 / 103 * n; U.tiles($('#tEst', sb), [['Prose prompt', U.fmt(prose), prose > 4096 ? 'red' : '', prose > 4096 ? 'over a 4,096 context' : 'fits in 4,096'], ['Graph-token prompt', U.fmt(gt), 'blue', gt > 4096 ? 'over a 4,096 context' : 'fits in 4,096'], ['Ratio of overheads', '≈' + U.fmt(4034 / 102 * (n - 1) / (135 / 103 * n), 0) + '×', '', '']]); };
+      U.slider($('#tCtl', sb), { label: 'Subgraph size (nodes)', min: 10, max: 400, step: 1, value: 103, id: 't-n' }, est); est(103);
+    },
+    check: { q: 'In Fig. 1, roughly how many extra tokens does GraphGPT spend to carry the 103-node neighborhood?', opts: ['About 4,000', 'About 135', 'Zero: graph tokens are free'], a: 1, why: '750 − 615 ≈ 135 tokens, roughly one per node.', hints: ['That is the prose version (4,649 − 615).', 'Each node still costs about one token.'] },
+    notes: {
+      say: ['So why not just use a GNN? Labels. A GNN usually gets fine-tuned on the target task, and its output layer is tied to one set of classes. New classes mean retraining.', 'The alternative is a language model, but then you have to write the graph out as text.', '[Point to bar a] Figure one tries that on TiM-DNN. Text only: 615 tokens, and ChatGPT says hardware. [Point to bar b] Add the neighbors as sentences: 4,649 tokens, still wrong. [Point to bar c] GraphGPT passes one vector per node: 750 tokens, and machine learning comes out first.', '[Point to 30×] Subtract the shared text and the structure costs about four thousand tokens as prose versus about 135 as graph tokens. One example, but that’s the motivation.'],
+      transition: 'So the real problem is getting structure into the model without writing it out.',
+      ask: 'Does token cost grow with graph size?', answer: 'Yes, roughly one graph token per node, so it’s linear in subgraph size. Compact, not constant.',
+      source: 'Fig. 1; §4.6 (103-node subgraph); Table 6. The 4,034 vs. 135 split is my arithmetic.'
+    }
+  });
+
+  /* ---------- ch4 problem ---------- */
+  scene({
+    id: 'problem', section: 'prob', ch: 4, kicker: 'Problem', short: 'The problem', time: '3:20–4:20',
+    title: 'Put graph structure into a frozen LLM’s input, so that it transfers',
+    dq: 'Can one model trained on Arxiv classify papers in PubMed or Cora without seeing their labels?',
+    lab: 'Play the train → test transfer settings.',
+    html: `<div class="split">
+      <div class="rail">
+        <p class="lede">Keep a pretrained language model frozen, and find a way to feed it graph structure so it can classify nodes, even on a graph it has never seen.</p>
+        <p><b>Supervised</b> means testing on held-out Arxiv papers. <b>Zero-shot</b> means testing on PubMed or Cora with no labels and no training on those datasets.</p>
+        <p class="c-muted">The method does use labels: Stage 2 trains on labeled Arxiv data. “Zero-shot” describes the target only.</p>
+        <div class="kicker" style="margin-top:6px">Three things the method has to solve</div>
+        <div class="cards" id="pC" style="grid-template-columns:1fr"></div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>Train / test settings · §4.2</div><div id="pFlow"></div><div id="pStep"></div><div id="pTxt" class="callout blue"></div></div></div>`,
+    src: 'Challenges C1–C3 from §1 · train/test settings from §4.2',
+    notice: 'The two targets sit at opposite ends: PubMed has 3 classes, Cora has 70.',
+    mount(sb) {
+      const C = [['C1', 'Make the spaces line up', 'Graph vectors and word vectors live in different spaces.', 'encoders'], ['C2', 'Get the LLM to use them', 'Two rounds of instruction tuning.', 'stage1'], ['C3', 'Reason on harder targets', 'Step-by-step answers distilled from GPT-3.5.', 'cot']];
+      $('#pC', sb).innerHTML = C.map(([k, t, d, id]) => `<div class="card"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><span class="chip t">${k}</span><h4>${t}</h4></div><p>${d}</p><div><button class="btn ghost" type="button" data-go="${id}">Deep dive →</button></div></div>`).join('');
+      $$('[data-go]', sb).forEach(b => b.onclick = () => U.goId(b.dataset.go));
+      const f = U.flow($('#pFlow', sb), { size: [640, 320], label: 'Train on Arxiv, test on Arxiv, PubMed and Cora', boundaries: [{ x: 10, y: 20, w: 230, h: 280, label: 'Train', kind: 'red' }, { x: 380, y: 20, w: 250, h: 280, label: 'Test', kind: 'blue' }], nodes: {
+        tr: { x: 125, y: 160, w: 180, h: 74, label: 'Arxiv', sub: '40 classes · labeled', kind: 'red' },
+        ax: { x: 505, y: 80, w: 200, h: 56, label: 'Arxiv test', sub: 'supervised', kind: 'blue' },
+        pm: { x: 505, y: 165, w: 200, h: 56, label: 'PubMed', sub: '3 classes · zero-shot', kind: 'blue' },
+        co: { x: 505, y: 250, w: 200, h: 56, label: 'Cora', sub: '70 classes · zero-shot', kind: 'blue' } },
+        edges: [['tr', 'ax'], ['tr', 'pm'], ['tr', 'co']] });
+      const T = ['One model is trained on Arxiv’s 40 CS categories.', 'Supervised: same graph, held-out papers, same label set.', 'Zero-shot to PubMed: a medical graph with 3 classes. No PubMed labels, no PubMed training.', 'Zero-shot to Cora: 70 classes, almost twice Arxiv’s label set.'];
+      const ids = [null, 'ax', 'pm', 'co'];
+      const sp = U.stepper($('#pStep', sb), { count: 4, render: async (i, anim) => { f.clear(); f.state('tr', 'on'); $('#pTxt', sb).textContent = T[i]; if (!ids[i]) return; f.edgeOn('tr', ids[i]); if (anim) await f.packet('tr', ids[i], 'pk', 750); f.state(ids[i], 'on'); } });
+      sp.go(0, false); return () => sp.destroy();
+    },
+    check: { q: 'In the “Arxiv → PubMed” zero-shot setting, which labels does GraphGPT train on?', opts: ['None at all', 'Labeled Arxiv instructions in Stage 2', 'A small number of PubMed labels'], a: 1, why: 'Zero-shot refers to the target. Stage 2 still uses labeled Arxiv data.', hints: ['Stage 1 is label-free, but Stage 2 is not.', 'No PubMed labels are used.'] },
+    notes: {
+      say: ['The problem in one line: keep a pretrained language model frozen, and find a way to feed it graph structure so it can classify nodes, even on a graph it has never seen.', '[Point to the diagram] This is how they test it. Train on Arxiv. Supervised means testing on held-out Arxiv papers. [Emphasize the difference] Zero-shot means testing on PubMed or Cora with no labels and no training on those datasets.', 'To be clear, the method does use labels: Stage 2 trains on labeled Arxiv data. “Zero-shot” is about the target only.', '[Point to the right column] The authors split this into three challenges: line up the two embedding spaces, get the LLM to use the graph input, and help it reason on hard targets.'],
+      transition: 'I’ll start with the big picture of the architecture, then go through each piece.',
+      ask: 'Is this transfer learning or zero-shot?', answer: 'Both. It transfers from a labeled source graph and is evaluated zero-shot on the target.',
+      source: '§1 (C1–C3); §4.2 (settings).'
+    }
+  });
+})();
+/* ---- scenes: method ---- */
+(function () {
+  const { $, $$ } = U;
+  const MINI = ['encoders', 'contrastive', 'stage1', 'stage2', 'cot'], MINIL = ['Encoders', 'Alignment', 'Stage 1', 'Stage 2', 'CoT'];
+  const minimap = cur => `<div class="chips" aria-label="Deep-dive map">${MINI.map((id, i) => `<button type="button" class="chip${id === cur ? ' t' : ''}" data-mm="${id}" style="cursor:pointer">${i + 1} · ${MINIL[i]}</button>`).join('')}</div>`;
+  const wireMini = sb => $$('[data-mm]', sb).forEach(b => b.onclick = () => U.goId(b.dataset.mm));
+
+  /* ---------- ch5 architecture ---------- */
+  const INFO = {
+    sub: ['Sampled subgraph', 'The target paper plus its neighbors h hops out. On Arxiv’s TiM-DNN example this is 103 nodes (§4.6).', ''],
+    enc: ['Graph encoder f_G', 'Text-grounded in phase 0, then frozen. In the paper a graph transformer; Eq. 2 shows the message-passing idea. Output Ĥ: one vector per node.', 'f'],
+    proj: ['Projector f_P', 'Maps each node vector into the LLM’s word-embedding space. The paper says it can be a single linear layer. It is the only part trained in both instruction-tuning stages.', 't'],
+    gt: ['Graph tokens', 'One token per node, spliced between <graph_begin> and <graph_end>. The first one is the target paper.', ''],
+    txt: ['Question + paper text', 'The instruction, title and abstract, tokenized as usual.', ''],
+    llm: ['Vicuna-7B-v1.5', 'Frozen. Reads graph tokens and word tokens in one sequence. Gradients pass through it to the projector, but its weights don’t move.', 'f'],
+    ans: ['Answer text', 'A label, plus reasoning in the CoT variant.', '']
+  };
+  scene({
+    id: 'arch', section: 'meth', ch: 5, kicker: 'Method · overview 1/3', short: 'GraphGPT in one picture', time: '4:20–5:20',
+    title: 'GraphGPT in one picture',
+    dq: 'Where does structure enter, and what actually learns?',
+    lab: 'Run a forward pass through the architecture; click any block for details.',
+    html: `<div class="viz"><div class="vtag"><span class="live"></span>Click a block · or play a forward pass</div><div id="aFlow"></div><div class="split even" style="gap:14px"><div id="aStep"></div><div id="aInfo" class="card"></div></div></div>
+      <div class="cards">
+        <div class="card red"><h4>Graph side</h4><p>Structure comes in as vectors from a frozen, text-grounded encoder.</p></div>
+        <div class="card"><h4>The bridge</h4><p><b>One trained layer</b> translates node vectors into tokens the LLM can read.</p></div>
+        <div class="card blue"><h4>Language side</h4><p>Vicuna-7B reads both streams and writes the answer. It is never updated.</p></div>
+      </div>
+      <div class="callout eng-only">One sentence in §3.2.2 says “fine-tuning the LLM.” The tuning-strategy paragraphs and Table 5 say it is frozen, and the tuned-parameter count (131.6M vs. 6.61B) backs the frozen reading.</div>`,
+    src: 'Redrawn from Fig. 2 (p. 4) and §3.1–3.2',
+    notice: 'Red blocks are on the graph side, blue on the language side. The projector is the only block whose weights change.',
+    mount(sb) {
+      const f = U.flow($('#aFlow', sb), { size: [1000, 330], label: 'GraphGPT architecture', onClick: id => info(id),
+        boundaries: [{ x: 10, y: 14, w: 440, h: 190, label: 'Graph side', kind: 'red' }, { x: 560, y: 14, w: 430, h: 300, label: 'Language side', kind: 'blue' }],
+        nodes: {
+          sub: { x: 95, y: 115, w: 140, h: 62, label: 'Subgraph', sub: '103 nodes', kind: 'red' },
+          enc: { x: 300, y: 115, w: 180, h: 62, label: 'Graph encoder f_G', sub: 'grounded · frozen', kind: 'red' },
+          proj: { x: 470, y: 255, w: 170, h: 62, label: 'Projector f_P', sub: 'trained', kind: 'red' },
+          gt: { x: 700, y: 115, w: 160, h: 56, label: 'Graph tokens', sub: 'one per node' },
+          txt: { x: 730, y: 255, w: 170, h: 56, label: 'Question + text', sub: 'tokenized', kind: 'blue' },
+          llm: { x: 905, y: 185, w: 140, h: 70, label: 'Vicuna-7B', sub: 'frozen', kind: 'blue' },
+          ans: { x: 905, y: 295, w: 130, h: 40, label: 'Answer', kind: 'blue' } },
+        edges: [['sub', 'enc'], ['enc', 'proj'], ['proj', 'gt'], ['gt', 'llm'], ['txt', 'llm'], ['llm', 'ans']] });
+      const info = id => { Object.keys(INFO).forEach(k => f.state(k, k === id ? 'sel' : '')); const [t, d, s] = INFO[id]; $('#aInfo', sb).innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h4>${t}</h4>${s ? `<span class="chip ${s}">${s === 't' ? 'trained' : 'frozen'}</span>` : ''}</div><p>${d.replace(/</g, '&lt;')}</p>`; };
+      info('proj');
+      const P = [['sub', 'enc'], ['enc', 'proj'], ['proj', 'gt'], ['txt', 'llm'], ['gt', 'llm'], ['llm', 'ans']];
+      const sp = U.stepper($('#aStep', sb), { count: P.length + 1, autoMs: 500, render: async (i, anim) => {
+        f.clear(); if (i === 0) { info('sub'); return; }
+        for (let k = 0; k < i; k++) { f.edgeOn(...P[k]); f.state(P[k][0], 'on'); }
+        const [a, b] = P[i - 1]; info(b);
+        if (anim) await f.packet(a, b, a === 'txt' ? 'pk b' : 'pk', 650);
+        f.state(b, 'on sel');
+      } });
+      return () => sp.destroy();
+    },
+    check: { q: 'During instruction tuning, which component’s weights are updated?', opts: ['Vicuna-7B', 'The graph encoder', 'The projector', 'All three'], a: 2, why: 'Encoder and LLM are frozen; only the projector learns (Table 5: 131.6M tuned parameters).', hints: ['The LLM stays frozen; full tuning ran out of memory.', 'The encoder is trained in phase 0, then frozen.', 'Table 5 rules this out.'] },
+    notes: {
+      say: ['Here’s the whole system in one picture. Left is the graph side, right is the language side.', '[Point to the subgraph] We start with a small subgraph around the paper. A graph encoder, trained earlier and then frozen, turns every node into a vector.', '[Point to the projector] The projector maps those vectors into graph tokens, the same shape as the LLM’s word embeddings. The paper says it can be a single linear layer.', '[Point to the right side] Meanwhile the question and the paper’s text are tokenized normally, and Vicuna-7B reads both streams and writes the answer.', '[Pause] So structure comes in on the left, language on the right, and the only thing trained in between is the projector.'],
+      transition: 'Let me zoom in on what the language model actually sees.',
+      ask: 'Is the LLM really never updated?', answer: 'The tuning-strategy paragraphs and Table 5 say it’s frozen. One sentence in §3.2.2 says “fine-tuning the LLM,” which reads as loose wording; the tuned-parameter count (131.6M vs. 6.61B) backs the frozen reading.',
+      source: 'Fig. 2; §3.1–3.2.'
+    }
+  });
+
+  /* ---------- ch6 the input ---------- */
+  scene({
+    id: 'input', section: 'meth', ch: 6, kicker: 'Method · overview 2/3', short: 'What the LLM reads', time: '5:20–6:00',
+    title: 'What the LLM reads: words with graph tokens spliced in',
+    dq: 'What does one training example look like from the model’s side?',
+    lab: 'Click graph tokens to see which node each one carries; compare tuning budgets.',
+    html: `<div class="viz"><div class="vtag">Node-classification input · Fig. 4 prompt, &lt;graph&gt; expanded</div>
+        <div class="tokrow" id="iTok"></div>
+        <div class="split even" style="gap:16px;align-items:center"><div id="iG" style="max-width:300px;width:100%;justify-self:center"></div><div id="iInfo" class="callout"></div></div>
+        <div class="legend"><span style="--c:var(--red)">graph token (one projected node vector)</span><span style="--c:#B65CFF">special marker</span><span style="--c:var(--blue)">ordinary word token</span></div>
+      </div>
+      <div class="split even">
+        <div class="card"><h4>Parameters updated during tuning</h4><div id="iSeg" class="controls"></div><div class="pbar" aria-hidden="true"><i id="iBar"></i></div><div id="iTiles" class="tiles"></div></div>
+        <div class="card"><h4>Why 131.6 million for “one linear layer”?</h4><p>One decomposition fits exactly: <span class="mono">32,003 × 4,096 + (128 × 4,096 + 4,096) = 131,612,672</span>. That would be the word-embedding table with 3 new special tokens, plus a 128 → 4,096 linear projector.</p><p class="c-dim">My hypothesis, not stated in the paper. Check the released code before claiming it.</p></div>
+      </div>`,
+    src: 'Prompt from Fig. 4 (p. 5) · token format §3.2.1 · parameter counts Table 5 · 2.0% and the decomposition are my arithmetic',
+    notice: 'The first graph token is the target paper; the rest are its neighbors.',
+    mount(sb) {
+      const T = [['w', 'Given'], ['w', 'a'], ['w', 'citation'], ['w', 'graph:'], ['m', '<graph_begin>'], ['g', 'g₁', 0], ['g', 'g₂', 1], ['g', 'g₃', 2], ['g', 'g₄', 3], ['w', '…'], ['g', 'gₙ', 4], ['m', '<graph_end>'], ['w', 'where'], ['w', 'the'], ['w', '0th'], ['w', 'node'], ['w', 'is'], ['w', 'the'], ['w', 'target'], ['w', 'paper'], ['w', '…'], ['w', 'Abstract: …'], ['w', 'Title: …'], ['w', 'Which'], ['w', 'arXiv'], ['w', 'CS'], ['w', 'sub-category'], ['w', 'does'], ['w', 'this'], ['w', 'paper'], ['w', 'belong'], ['w', 'to?']];
+      $('#iTok', sb).innerHTML = T.map(([k, s, n], i) => `<${k === 'g' ? 'button type="button"' : 'span'} class="tk ${k === 'w' ? '' : k}" data-n="${n ?? ''}">${s.replace(/</g, '&lt;')}</${k === 'g' ? 'button' : 'span'}>`).join('');
+      const pos = [[160, 110], [60, 50], [260, 45], [275, 170], [55, 180]];
+      const svg = U.svg('svg', { viewBox: '0 0 320 220', class: 'flow', role: 'img', 'aria-label': 'Subgraph whose nodes map to graph tokens' }, $('#iG', sb));
+      [1, 2, 3, 4].forEach(j => U.svg('line', { x1: pos[0][0], y1: pos[0][1], x2: pos[j][0], y2: pos[j][1], stroke: '#3A4479', 'stroke-width': 2 }, svg));
+      const C = pos.map(([x, y], j) => { const c = U.svg('circle', { cx: x, cy: y, r: j ? 16 : 24, fill: j ? '#1B2B5E' : '#5A1426', stroke: j ? '#4C8DFF' : '#F2385A', 'stroke-width': 2 }, svg); const t = U.svg('text', { x, y: y + 4, 'text-anchor': 'middle', fill: '#F6F7FD', style: 'font:600 11px var(--f-mono)' }, svg); t.textContent = j === 4 ? 'n' : String(j + 1); return c; });
+      const sel = j => { $$('.tk.g', sb).forEach(b => b.classList.toggle('on', +b.dataset.n === j)); C.forEach((c, k) => { c.setAttribute('fill', k === j ? (k ? '#4C8DFF' : '#F2385A') : (k ? '#1B2B5E' : '#5A1426')); c.style.filter = k === j ? `drop-shadow(0 0 12px ${k ? '#4C8DFF' : '#F2385A'})` : ''; }); $('#iInfo', sb).innerHTML = j === 0 ? '<b>g₁ is the target paper.</b> Its vector comes from the frozen encoder and passes through the projector, so it carries both its own text and what its neighbors said.' : `<b>g${j === 4 ? 'ₙ' : '₁₂₃₄'[j]} is a neighbor.</b> One token per node, however much text that paper has. That is where the token savings come from.`; };
+      $$('.tk.g', sb).forEach(b => b.onclick = () => sel(+b.dataset.n)); sel(0);
+      const show = m => { const fr = m === 'frozen'; $('#iBar', sb).style.width = fr ? '2%' : '100%'; U.tiles($('#iTiles', sb), fr ? [['Tuned', '131.6M', 'red', '2.0% of full'], ['Stage 1 time', '22:53:33', '', '4× A100 40 GB'], ['Fits?', 'Yes', 'blue', 'batch size 2']] : [['Tuned', '6.61B', 'red', 'LLM included'], ['Stage 1 time', 'OOM', 'red', 'out of memory'], ['Fits?', 'No', '', 'even at batch size 1']]); };
+      U.seg($('#iSeg', sb), [['frozen', 'LLM frozen (GraphGPT)'], ['tune', 'Tune the LLM too']], 'frozen', show, 'Tuning strategy'); show('frozen');
+    },
+    notes: {
+      say: ['[Point to the token row] This is the actual input. The question is ordinary text, in blue. Where the prompt says “graph,” GraphGPT splices in one red vector per node, between begin and end markers. The first one is the target paper; the rest are its neighbors.', '[Point to the bar] And this is what the bridge costs: about 131.6 million parameters get trained. That’s two percent of the 6.6 billion you’d train if you tuned the whole LLM.'],
+      transition: 'Training that bridge happens in three phases.',
+      ask: 'Why 131.6M if the projector is one linear layer?', answer: 'The number likely includes the word-embedding table for the new special tokens. That’s my hypothesis; see backup B4.',
+      source: '§3.2.1 (token format); Fig. 4 (prompt); Table 5 (parameters).'
+    }
+  });
+
+  /* ---------- ch7 phases ---------- */
+  const PH = [
+    { k: '0', t: 'Text-graph grounding', tr: 'the graph encoder, against a text encoder', da: 'graph + each node’s text, contrastive loss', la: 'none', st: { enc: 't', proj: '', llm: '' }, go: 'encoders' },
+    { k: '1', t: 'Stage 1 · graph matching', tr: 'the projector only', da: 'unlabeled subgraphs + shuffled paper titles', la: 'none', st: { enc: 'f', proj: 't', llm: 'f' }, go: 'stage1' },
+    { k: '2', t: 'Stage 2 · task instructions', tr: 'the projector again, starting from Stage 1', da: 'Arxiv tasks; plain or GPT-3.5 step-by-step answers', la: 'yes, source graph only', st: { enc: 'f', proj: 't', llm: 'f' }, go: 'stage2' }];
+  scene({
+    id: 'phases', section: 'meth', ch: 7, kicker: 'Method · overview 3/3', short: 'Three training phases', time: '6:00–6:50',
+    title: 'Training runs in three phases',
+    dq: 'Which part learns when, and from what data?',
+    lab: 'Switch phases to see what is trained, frozen or not yet used.',
+    html: `<div class="viz"><div class="vtag">Pick a phase</div><div id="phTabs"></div>
+        <div class="split even" style="gap:18px;align-items:center"><div id="phMap"></div><div id="phCard" class="card"></div></div>
+        <div class="legend"><span style="--c:var(--red)">trained in this phase</span><span style="--c:var(--blue)">frozen</span><span style="--c:#3A4479">not used</span></div></div>
+      <div class="callout blue">Frozen in both instruction-tuning stages: the graph encoder and Vicuna-7B. Stage 2 starts from the Stage 1 projector (§4.1.4).</div>`,
+    src: '§3.1–3.3 · §4.1.4',
+    check: { q: 'Which phases use human-provided labels?', opts: ['All three', 'Only Stage 2', 'Only grounding'], a: 1, why: 'Grounding and Stage 1 are self-supervised. Stage 2 uses labeled Arxiv instructions.', hints: ['Grounding uses each node’s own text as the target; Stage 1 uses titles.', 'Grounding pairs a node with its own text. No labels needed.'] },
+    mount(sb) {
+      const f = U.flow($('#phMap', sb), { size: [440, 240], label: 'Component status by phase', nodes: {
+        txt: { x: 90, y: 50, w: 150, h: 50, label: 'Text encoder f_T' }, enc: { x: 90, y: 180, w: 150, h: 54, label: 'Graph encoder' },
+        proj: { x: 245, y: 180, w: 120, h: 54, label: 'Projector' }, llm: { x: 370, y: 115, w: 120, h: 70, label: 'Vicuna-7B' } },
+        edges: [['txt', 'enc'], ['enc', 'proj'], ['proj', 'llm']] });
+      const set = k => { const p = PH[+k];
+        const kind = s => s === 't' ? 'red on' : s === 'f' ? 'blue' : 'dim';
+        f.state('enc', kind(p.st.enc)); f.state('proj', kind(p.st.proj)); f.state('llm', kind(p.st.llm)); f.state('txt', k === '0' ? 'blue' : 'dim');
+        Object.values(f.E).forEach(e => e.classList.remove('on')); if (k === '0') f.edgeOn('txt', 'enc'); else { f.edgeOn('enc', 'proj'); f.edgeOn('proj', 'llm'); }
+        $('#phCard', sb).innerHTML = `<div class="kicker">Phase ${p.k}</div><h4>${p.t}</h4><table class="t"><tr><th>Trains</th><td>${p.tr}</td></tr><tr><th>Data</th><td>${p.da}</td></tr><tr><th>Labels</th><td>${p.la}</td></tr></table><div><button class="btn ghost" type="button" id="phGo">Deep dive →</button></div>`;
+        $('#phGo', sb).onclick = () => U.goId(p.go); };
+      U.tabs($('#phTabs', sb), PH.map((p, i) => [String(i), p.k + ' · ' + p.t.split(' · ').pop()]), set);
+    },
+    notes: {
+      say: ['[Move left to right along the timeline] Training runs in three phases.', 'First, grounding: the graph encoder is trained against a text encoder so its vectors line up with text. No labels.', 'Then Stage 1, graph matching. Only the projector learns, and still no labels.', 'Then Stage 2: labeled Arxiv tasks, with either plain answers or step-by-step answers written by GPT-3.5. Again only the projector learns, starting from where Stage 1 left it.', '[Point to the bottom line] The LLM itself never changes.'],
+      transition: 'Starting with the encoders.',
+      ask: 'Why two instruction-tuning stages instead of one?', answer: 'Stage 1 teaches the model to read graph tokens without labels; Stage 2 specializes it. Table 1 shows dropping Stage 1 helps supervised accuracy but hurts transfer.',
+      source: '§3.1–3.3; §4.1.4.'
+    }
+  });
+
+  /* ---------- ch8 encoders ---------- */
+  scene({
+    id: 'encoders', section: 'meth', ch: 8, kicker: 'Deep dive 1/5 · §3.1', short: 'Two encoders', time: '6:50–8:00',
+    title: 'Each paper gets two vectors: one from the graph, one from its text',
+    dq: 'What does the self-loop in Ã = A + I actually do?',
+    lab: 'Compute one layer of Ã·H by hand, with and without self-loops.',
+    html: `<div id="mm"></div><div class="split">
+      <div class="rail">
+        <div class="eq"><span class="tag">EQ. 2</span><i>H</i><sup>(<i>l</i>)</sup> = σ( <span class="r">Ã</span> <i>H</i><sup>(<i>l</i>−1)</sup> <span class="b"><i>W</i></span> ),  Ã = <i>A</i> + <i>I</i></div>
+        <p><b class="c-red">Ã</b> decides who talks to whom; the + I keeps a node’s own features. <b class="c-blue">W</b> decides what gets passed. σ is a nonlinearity.</p>
+        <div class="eq"><span class="tag">EQ. 3</span><i>H</i> = <i>f</i><sub>G</sub>(<i>X</i>),  <i>T</i> = <i>f</i><sub>T</sub>(<i>C</i>),  Ĥ = norm(<i>H</i>),  T̂ = norm(<i>T</i>)</div>
+        <p><i>f</i><sub>G</sub> encodes the graph, <i>f</i><sub>T</sub> encodes each paper’s raw text C. Row-normalizing both makes Ĥᵢ · T̂ⱼ a cosine similarity.</p>
+        <div class="cards" style="grid-template-columns:1fr 1fr"><div class="card red"><h4>Ĥᵢ</h4><p>where paper i sits</p></div><div class="card blue"><h4>T̂ᵢ</h4><p>what it is about</p></div></div>
+        <p class="c-muted">In the paper, f_G is a graph transformer and f_T a standard transformer. Both output N × d.</p>
+        <div class="callout eng-only">Eq. 2 as printed has no degree normalization and no layer index on W. Kipf &amp; Welling’s GCN uses D̃<sup>−½</sup> Ã D̃<sup>−½</sup> H<sup>(l−1)</sup> W<sup>(l)</sup>. Tick “normalize” in the lab to see the difference.</div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>One layer of Ã·H on four papers (scalar features)</div>
+        <div id="eG"></div><div id="eCtl" class="controls"></div><div class="tw" id="eMx"></div><div id="eTxt" class="callout blue"></div></div></div>`,
+    src: 'Eqs. (2)–(3) from §3.1 · diagram redrawn from Fig. 3 (p. 4) · toy graph made for this site',
+    myth: '“Ã just adds up neighbors.” Without + I, a node’s new vector would ignore its own features entirely.',
+    mount(sb) {
+      $('#mm', sb).innerHTML = minimap('encoders'); wireMini(sb);
+      const names = ['a', 'b', 'c', 'd'], h = [1.0, 0.0, 0.5, 2.0], A = [[0, 1, 1, 0], [1, 0, 1, 0], [1, 1, 0, 1], [0, 0, 1, 0]];
+      const P = [[60, 60], [60, 170], [200, 115], [330, 115]];
+      const svg = U.svg('svg', { viewBox: '0 0 400 220', class: 'flow', role: 'img', 'aria-label': 'Four-node graph' }, $('#eG', sb));
+      const L = []; for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) if (A[i][j]) L.push(U.svg('line', { x1: P[i][0], y1: P[i][1], x2: P[j][0], y2: P[j][1], stroke: '#3A4479', 'stroke-width': 2 }, svg));
+      const loops = P.map(([x, y]) => U.svg('circle', { cx: x, cy: y - 30, r: 12, fill: 'none', stroke: '#FF6B84', 'stroke-width': 2, 'stroke-dasharray': '4 3' }, svg));
+      const T = P.map(([x, y], i) => { U.svg('circle', { cx: x, cy: y, r: 22, fill: i === 2 ? '#5A1426' : '#1B2B5E', stroke: i === 2 ? '#F2385A' : '#4C8DFF', 'stroke-width': 2 }, svg); const t = U.svg('text', { x, y: y + 4, 'text-anchor': 'middle', fill: '#F6F7FD', style: 'font:600 12px var(--f-mono)' }, svg); const v = U.svg('text', { x, y: y + 42, 'text-anchor': 'middle', fill: '#8DB6FF', style: 'font:500 11px var(--f-mono)' }, svg); t.textContent = names[i]; return v; });
+      let self = true, norm = false;
+      const paint = () => {
+        const At = A.map((r, i) => r.map((v, j) => v + (self && i === j ? 1 : 0)));
+        const deg = At.map(r => r.reduce((a, b) => a + b, 0));
+        const M = At.map((r, i) => r.map((v, j) => norm ? (deg[i] && deg[j] ? v / Math.sqrt(deg[i] * deg[j]) : 0) : v));
+        const out = M.map(r => r.reduce((a, v, j) => a + v * h[j], 0));
+        loops.forEach(l => l.style.opacity = self ? 1 : 0);
+        T.forEach((t, i) => t.textContent = `h ${h[i].toFixed(1)} → ${out[i].toFixed(2)}`);
+        $('#eMx', sb).innerHTML = `<table class="t" style="max-width:520px"><tr><th></th>${names.map(n => `<th class="n">${n}</th>`).join('')}<th class="n">× h</th><th class="n">= Ã·h</th></tr>${M.map((r, i) => `<tr class="${i === 2 ? 'hl' : ''}"><th>${names[i]}</th>${r.map((v, j) => `<td class="n" style="${i === j && self ? 'color:var(--red2)' : ''}">${norm ? v.toFixed(2) : v}</td>`).join('')}<td class="n c-muted">${h[i].toFixed(1)}</td><td class="n" style="color:var(--hi)">${out[i].toFixed(2)}</td></tr>`).join('')}</table>`;
+        $('#eTxt', sb).innerHTML = `Node <b>c</b> (red) has neighbors a, b, d. ${self ? `With the self-loop its output is ${norm ? 'a degree-weighted mix' : 'its own 0.5 plus 1.0 + 0.0 + 2.0'} = <b>${out[2].toFixed(2)}</b>.` : `Without the self-loop it gets 1.0 + 0.0 + 2.0 = <b>${out[2].toFixed(2)}</b>, and its own 0.5 is lost.`} ${!norm ? 'Unnormalized sums grow with degree, which is why the standard GCN divides by it.' : ''} W and σ come next; they don’t change who talks to whom.`;
+      };
+      U.check($('#eCtl', sb), { label: 'Self-loops (+ I)', checked: true, id: 'e-self' }, v => { self = v; paint(); });
+      U.check($('#eCtl', sb), { label: 'Normalize by degree (standard GCN)', id: 'e-norm' }, v => { norm = v; paint(); });
+      paint();
+    },
+    check: { q: 'Why does Eq. 2 use Ã = A + I instead of A?', opts: ['To make the matrix symmetric', 'So each node keeps its own features in the update', 'To normalize by node degree'], a: 1, why: 'The identity adds a self-loop, so a node’s own vector is part of the sum.', hints: ['Adding I doesn’t change symmetry.', 'Normalization is a separate step (D̃^−½ … D̃^−½), not printed in Eq. 2.'] },
+    notes: {
+      say: ['First, the graph encoder.', '[Point to Eq. 2] Equation two is one message-passing layer with matrices. Each row of H is one node. Multiplying by A-tilde adds up every node’s neighbors, and the identity adds the node itself, so it keeps its own features. W transforms the result and sigma adds a nonlinearity. Easy way to remember it: the adjacency matrix decides who talks to whom, W decides what they say. The authors actually use a graph transformer, but this is the idea.', '[Point to Eq. 3] Equation three sets up grounding. The graph encoder produces H. A separate text encoder reads each paper’s title and abstract and produces T. Both get normalized row by row.', '[Point to the two lanes] So every paper has two descriptions: H-hat, where it sits, and T-hat, what it’s about. Since both are unit vectors, their dot product is a cosine similarity.'],
+      transition: 'The question is how to make those two descriptions agree.',
+      ask: 'Why add the identity?', answer: 'Without self-loops, a node’s new vector would depend only on its neighbors and drop its own features.',
+      source: '§3.1, Eqs. (2)–(3), Fig. 3. Eq. 2 as printed has no degree normalization; the standard GCN form is in backup B4.'
+    }
+  });
+
+  /* ---------- ch9 contrastive ---------- */
+  scene({
+    id: 'contrastive', section: 'meth', ch: 9, kicker: 'Deep dive 2/5 · §3.1', short: 'Contrastive alignment', time: '8:00–9:25',
+    title: 'A contrastive loss lines up graph and text vectors',
+    dq: 'How do you make “where a paper sits” agree with “what it says”?',
+    lab: 'Train a 3×3 similarity matrix and watch the CLIP-style loss fall.',
+    html: `<div id="mm"></div><div class="split">
+      <div class="rail">
+        <div class="eq"><span class="tag">EQ. 4</span>Γ<sub>1</sub> = (Ĥ T̂<sup>⊤</sup>)·exp(τ),  Γ<sub>2</sub> = (Ĥ T̂′<sup>⊤</sup>)·exp(τ),  Γ<sub>3</sub> = (T̂ T̂′<sup>⊤</sup>)·exp(τ)<br>ℒ = Σ<sub><i>i</i></sub> ½ λ<sub><i>i</i></sub> ( CE(Γ<sub><i>i</i></sub>, <i>y</i>) + CE(Γ<sub><i>i</i></sub><sup>⊤</sup>, <i>y</i>) ),  <i>y</i> = (0, 1, …, <i>n</i>−1)</div>
+        <p>T̂′ is each node’s average neighbor text. <b>Γ₁</b> compares a paper’s graph vector with its own text, <b>Γ₂</b> with its neighbors’ text, <b>Γ₃</b> its text with its neighbors’ text.</p>
+        <p class="lede">Each row is a small classification problem: which text is mine?</p>
+        <p>The diagonal holds the matching pairs. Every other cell is a negative from the same batch. Rows give graph → text, columns (Γᵀ) give text → graph, and the ½ averages the two. This is the loss CLIP uses for images and captions.</p>
+        <div class="callout eng-only">Γ₃ as printed is (T̂ᵀ T̂′ᵀ), which multiplies d×N by d×N and is undefined. Reading it as N×N like Γ₁ and Γ₂ gives T̂ T̂′ᵀ. The paper doesn’t say whether τ is learned or give the λ values.</div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>Γ₁ for a batch of three papers · made-up values</div>
+        <div class="tw"><table class="t hm" id="cHm"></table></div>
+        <div id="cCtl" class="controls"></div>
+        <div id="cTiles" class="tiles"></div>
+        <div id="cTxt" class="callout blue"></div></div></div>`,
+    src: 'Eq. (4) from §3.1, a CLIP-style loss (Radford et al., 2021) · matrix values and softmax arithmetic are mine',
+    notice: 'At the start, row A’s softmax is about 0.51 / 0.26 / 0.23, so its loss is −log 0.51 ≈ 0.67.',
+    mount(sb) {
+      $('#mm', sb).innerHTML = minimap('contrastive'); wireMini(sb);
+      const B0 = [[.9, .2, .1], [.3, .8, .2], [.1, .3, .7]], TG = [[1, -.2, -.2], [-.2, 1, -.2], [-.2, -.2, 1]];
+      let t = 0, sc = 1, hard = false;
+      const sm = r => { const m = Math.max(...r), e = r.map(v => Math.exp(v - m)), s = e.reduce((a, b) => a + b, 0); return e.map(v => v / s); };
+      const paint = () => {
+        const S = B0.map((r, i) => r.map((v, j) => { let b = v; if (hard && i === 0 && j === 1) b = .85; return (1 - t) * b + t * (hard && i === 0 && j === 1 ? .6 : TG[i][j]); }));
+        const G = S.map(r => r.map(v => v * sc));
+        const rows = G.map(sm), cols = [0, 1, 2].map(j => sm(G.map(r => r[j])));
+        const lr = rows.map((p, i) => -Math.log(p[i])), lc = cols.map((p, j) => -Math.log(p[j]));
+        const loss = .5 * (lr.reduce((a, b) => a + b) / 3 + lc.reduce((a, b) => a + b) / 3);
+        const col = v => { const a = U.clamp((v + .3) / 1.3, 0, 1); return `rgba(${Math.round(76 + (242 - 76) * a)},${Math.round(141 - 85 * a)},${Math.round(255 - 165 * a)},${.25 + .6 * a})`; };
+        $('#cHm', sb).innerHTML = `<tr><th></th><th class="n">text A</th><th class="n">text B</th><th class="n">text C</th><th class="n">row softmax (matching)</th></tr>` + S.map((r, i) => `<tr><th>graph ${'ABC'[i]}</th>${r.map((v, j) => `<td class="cell" style="background:${col(v)};${i === j ? 'box-shadow:inset 0 0 0 2px #FFC2CD' : ''}">${v.toFixed(2)}</td>`).join('')}<td class="n">${rows[i][i].toFixed(2)}</td></tr>`).join('');
+        U.tiles($('#cTiles', sb), [['Row A softmax', rows[0].map(v => v.toFixed(2)).join(' / '), '', 'A, B, C'], ['Row A loss', lr[0].toFixed(2), 'red', '−log p(match)'], ['Batch loss ℒ', loss.toFixed(2), 'blue', '½ (rows + columns)']]);
+        $('#cTxt', sb).innerHTML = t < .05 ? 'Untrained: the diagonal is only a little higher than the rest, so each paper picks its own text with about half the probability.' : t > .95 ? (hard ? 'Trained, but graph A still looks a lot like text B. Hard negatives like that keep the loss up, which is what forces the encoder to separate similar papers.' : 'Trained: the diagonal dominates. Each graph vector now points to its own paper’s text.') : 'Training raises the diagonal and lowers everything else. Higher scale exp(τ) sharpens the softmax.';
+      };
+      const c = $('#cCtl', sb);
+      U.slider(c, { label: 'Training progress', min: 0, max: 1, step: .01, value: 0, fmt: v => Math.round(v * 100) + '%', id: 'c-t' }, v => { t = v; paint(); });
+      U.slider(c, { label: 'Scale exp(τ)', min: 1, max: 10, step: .5, value: 1, fmt: v => v.toFixed(1), id: 'c-s' }, v => { sc = v; paint(); });
+      U.check(c, { label: 'Make text B a hard negative for A', id: 'c-h' }, v => { hard = v; paint(); });
+      paint();
+    },
+    check: { q: 'In Γ₁, what do the off-diagonal cells represent?', opts: ['Matching graph–text pairs', 'Negatives: other papers’ text in the same batch', 'Neighbor text averages'], a: 1, why: 'Only the diagonal pairs a paper with its own text. Everything else in the row is a negative.', hints: ['Those are on the diagonal.', 'That is T̂′, used in Γ₂ and Γ₃.'] },
+    notes: {
+      say: ['Equation four is the same kind of loss CLIP uses to line up images and captions.', '[Point to the matrix] Three papers in a batch. Rows are graph vectors, columns are text vectors, each cell a similarity. The glowing diagonal pairs should match; everything else shouldn’t.', '[Point to the softmax] Each row is a small classification problem: which text is mine? For row A, a softmax over 0.9, 0.2 and 0.1 puts about half the weight on the right answer, so the loss is about 0.67. Training raises the diagonal until that goes toward zero. Columns give the reverse direction, and the one-half averages them.', '[Point to Γ1–Γ3] The paper builds three matrices: graph versus own text, graph versus the neighbors’ average text, and text versus neighbors’ text. The lambdas weight them; exp of tau is a temperature.', 'Gamma-three as printed has shapes that don’t multiply. I read it as T-hat times T-hat-prime transpose.'],
+      transition: 'Now the encoder’s output is tied to text. But the LLM has never seen any of these vectors.',
+      ask: 'Is τ learned? What are the λ values?', answer: 'In CLIP the scale exp(τ) is learned. This paper says neither whether τ is learned nor what the λs are.',
+      source: 'Eq. (4), §3.1; CLIP. Matrix values and the softmax are my illustration; the CE definition is standard, not printed in the paper.'
+    }
+  });
+
+  /* ---------- ch10 stage 1 ---------- */
+  const TITLES = ['smt based induction methods for timed systems', 'bounded model checking of timed automata', 'k-induction for hybrid system verification'];
+  scene({
+    id: 'stage1', section: 'meth', ch: 10, kicker: 'Deep dive 3/5 · §3.2.1', short: 'Stage 1: graph matching', time: '9:25–10:40',
+    title: 'Stage 1: match graph tokens to shuffled titles, with no labels',
+    dq: 'How does an LLM learn to read vectors it has never seen, without anyone labeling anything?',
+    lab: 'Play the Stage 1 task yourself: put the shuffled titles back in token order.',
+    html: `<div id="mm"></div><div class="split">
+      <div class="rail">
+        <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px">
+          <li>Pick a node, sample its neighbors <i>h</i> hops out.</li>
+          <li>Encode and project: one graph token per node.</li>
+          <li>Shuffle those nodes’ paper titles.</li>
+          <li>Ask the LLM to put the titles back in token order.</li></ol>
+        <div class="chips"><span class="chip f">Encoder: frozen</span><span class="chip f">LLM: frozen</span><span class="chip t">Projector: trained</span></div>
+        <p class="lede">The right order is known because we built the subgraph. No human labels, so this works on any graph with text on its nodes.</p>
+        <p>The paper’s real answer, for central node 68442 in Arxiv:</p>
+        <p class="quote">“Graph token 1 corresponds to smt based induction methods for timed systems. Graph token 2 corresponds to …”</p>
+        <div class="callout eng-only">Why would matching titles help classification? To match titles, the LLM has to tell graph tokens apart using information that lines up with each node’s text, so the projector learns to put graph tokens where the LLM can read them. The evidence is indirect: dropping Stage 1 hurts transfer (Table 1, “-stage2”).</div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>You are the LLM · match each graph token to a title</div>
+        <div id="sG"></div><div class="match" id="sM"></div>
+        <div class="controls" id="sCtl"></div><div id="sOut" class="callout blue">Each token is a projected node vector. g₁ is the center; g₂ and g₃ are its neighbors. Pick a title for each.</div>
+        <p class="src" style="margin:0">Only the first title is from the paper (Fig. 4). The other two are invented for this demo; the paper elides them.</p></div></div>`,
+    src: '§3.2.1 · answer quoted from Fig. 4 (p. 5) · Table 5',
+    myth: '“Stage 1 needs annotated data.” The targets come from the graph construction itself, so it is self-supervised.',
+    mount(sb) {
+      $('#mm', sb).innerHTML = minimap('stage1'); wireMini(sb);
+      const svg = U.svg('svg', { viewBox: '0 0 420 120', class: 'flow', role: 'img', 'aria-label': 'Central node g1 with neighbors g2 and g3' }, $('#sG', sb));
+      const P = [[210, 60], [70, 60], [350, 60]];
+      [1, 2].forEach(j => U.svg('line', { x1: P[0][0], y1: P[0][1], x2: P[j][0], y2: P[j][1], stroke: '#3A4479', 'stroke-width': 2 }, svg));
+      P.forEach(([x, y], j) => { U.svg('circle', { cx: x, cy: y, r: j ? 22 : 28, fill: j ? '#3A1530' : '#F2385A', stroke: '#FF6B84', 'stroke-width': 2, style: 'filter:drop-shadow(0 0 10px rgba(242,56,90,.7))' }, svg); const t = U.svg('text', { x, y: y + 5, 'text-anchor': 'middle', fill: '#fff', style: 'font:600 14px var(--f-mono)' }, svg); t.textContent = 'g' + '₁₂₃'[j]; });
+      const shuffled = [2, 0, 1];
+      $('#sM', sb).innerHTML = [0, 1, 2].map(i => `<div class="mrow" data-i="${i}"><span class="gt">g${'₁₂₃'[i]}</span><select class="sel" id="s-m${i}" aria-label="Title for graph token ${i + 1}"><option value="">Choose a title…</option>${shuffled.map(k => `<option value="${k}">${TITLES[k]}</option>`).join('')}</select></div>`).join('');
+      const check = () => { let ok = 0; $$('.mrow', sb).forEach(r => { const v = $('select', r).value; const good = v !== '' && +v === +r.dataset.i; r.classList.toggle('ok', good); r.classList.toggle('no', v !== '' && !good); if (good) ok++; });
+        $('#sOut', sb).innerHTML = ok === 3 ? '<b>All three right.</b> The answer key came for free: we built the subgraph, so we knew which title belonged to which token. That is the whole trick of Stage 1.' : `${ok} of 3 correct. In training, the loss on the LLM’s wrong answers flows back through the frozen LLM into the projector, nudging the tokens to be more readable. Hint: the center paper g₁ is the one quoted in the paper.`; };
+      U.btn($('#sCtl', sb), 'Check my order', check, 'primary');
+      U.btn($('#sCtl', sb), 'Show the answer', () => { [0, 1, 2].forEach(i => { $('#s-m' + i, sb).value = String(i); }); check(); });
+    },
+    check: { q: 'Where do Stage 1’s target answers come from?', opts: ['Human annotators label the titles', 'GPT-3.5 writes them', 'The subgraph construction: we know which title belongs to which node'], a: 2, why: 'Because we sampled the subgraph, the correct token-to-title mapping is known, so no labels are needed.', hints: ['No human labels are used in Stage 1.', 'GPT-3.5 is used for CoT answers in Stage 2.'] },
+    notes: {
+      say: ['Stage 1 is how the LLM learns to read these graph vectors, and it needs no labels.', '[Walk down the steps] Sample a node’s neighborhood, encode and project it into one token per node, then shuffle those papers’ titles and ask the LLM to put them back in token order.', '[Point to the matching] Each graph token has to find its own title in a scrambled list. [Point to the answer] This is the paper’s real example, centered on node 68442 in Arxiv: graph token one is a paper on SMT-based induction methods for timed systems, and so on.', 'Nobody labeled anything. We built the subgraph, so we know which title goes where, and that works on any graph with text on its nodes.', '[Point to the chips] Only the projector learns here. That keeps it cheap and forces the projector to do the translating.'],
+      transition: 'Stage 1 teaches it to read graphs. Stage 2 teaches it to use them for actual tasks.',
+      ask: 'Why would matching titles help classification?', answer: 'To match titles, the LLM has to tell graph tokens apart using information that lines up with each node’s text, so the projector learns to put graph tokens where the LLM can read them. The evidence is indirect: dropping Stage 1 hurts transfer (Table 1, “-stage2”).',
+      source: '§3.2.1; Fig. 4 (top); Table 5.'
+    }
+  });
+
+  /* ---------- ch11 stage 2 ---------- */
+  scene({
+    id: 'stage2', section: 'meth', ch: 11, kicker: 'Deep dive 4/5 · §3.2.2', short: 'Stage 2: task instructions', time: '10:40–11:45',
+    title: 'Stage 2: the same projector, now trained on labeled tasks',
+    dq: 'If the LLM is frozen, what does “instruction tuning” actually change?',
+    lab: 'Compute the Eq. 5 loss for a short answer, token by token.',
+    html: `<div id="mm"></div><div class="split">
+      <div class="rail">
+        <div id="s2Tabs"></div><div id="s2P" class="card"></div>
+        <div class="tiles"><div class="tile red"><div class="tl">Starts from</div><div class="tv" style="font-size:17px">Stage 1 projector</div></div><div class="tile"><div class="tl">New data</div><div class="tv" style="font-size:17px">labeled Arxiv</div><div class="ts">plain or CoT answers</div></div><div class="tile blue"><div class="tl">Still frozen</div><div class="tv" style="font-size:17px">LLM + encoder</div><div class="ts">so not full fine-tuning</div></div></div>
+      </div>
+      <div class="viz"><div class="vtag"><span class="live"></span>Eq. 5 · next-token prediction on the answer</div>
+        <div class="eq"><span class="tag">EQ. 5</span><i>p</i>(<i>X</i><sub>O</sub> | <i>X</i><sub>𝒢</sub>, <i>X</i><sub>I</sub>) = ∏<sub><i>i</i>=1</sub><sup><i>L</i></sup> <i>p</i><sub><span class="r">θ</span></sub>( <i>x<sub>i</sub></i> | <i>X</i><sub>𝒢</sub>, <i>X</i><sub>I,&lt;<i>i</i></sub>, <i>X</i><sub>O,&lt;<i>i</i></sub> )</div>
+        <p class="c-muted" style="margin:0">θ is what gets trained, here only the projector. Gradients pass through the frozen LLM to reach it.</p>
+        <div id="s2Tok" class="tokrow"></div><div id="s2Ctl" class="controls"></div><div id="s2Tiles" class="tiles"></div>
+        <p class="src" style="margin:0">Toy probabilities for illustration. Drag a slider to see one token’s effect on the loss.</p>
+        <div class="callout eng-only">Eq. 5 conditions on X_I,&lt;i as printed. In standard instruction tuning the whole instruction comes before the answer and the loss is on answer tokens only.</div>
+      </div></div>`,
+    src: '§3.2.2 · prompts quoted from Fig. 4 middle and bottom (p. 5), abridged · Eq. (5) from §3.2.1',
+    mount(sb) {
+      $('#mm', sb).innerHTML = minimap('stage2'); wireMini(sb);
+      U.tabs($('#s2Tabs', sb), [['nc', 'Node classification'], ['lp', 'Link prediction']], v => {
+        $('#s2P', sb).innerHTML = v === 'nc' ? '<div class="kicker">Instruction</div><p class="mono" style="font-size:13px">Given a citation graph: &lt;graph&gt; where the 0th node is the target paper … Abstract: … Title: … Which arXiv CS sub-category does this paper belong to?</p><div class="kicker">Answer in the paper</div><p class="mono" style="font-size:13px;color:var(--hi)">cs.IT, cs.LG, cs.SP, cs.CV, cs.NA. … So, it is likely to belong to cs.IT</p>' : '<div class="kicker">Instruction</div><p class="mono" style="font-size:13px">&lt;graph&gt; … Abstract … Title …, and the other sequence of graph tokens &lt;graph&gt; … are these two central nodes connected? Answer “yes” or “no”.</p><div class="kicker">Answer in the paper</div><p class="mono" style="font-size:13px;color:var(--hi)">Yes, they are connected. …</p>';
+      });
+      const tok = ['cs', '.', 'IT'], p = [.7, .95, .4];
+      const paint = () => { const prod = p.reduce((a, b) => a * b, 1), loss = -p.reduce((a, b) => a + Math.log(b), 0);
+        $('#s2Tok', sb).innerHTML = '<span class="tk m">… instruction + graph tokens</span>' + tok.map((t, i) => `<span class="tk g" style="cursor:default">${t} <span class="c-muted">p=${p[i].toFixed(2)}</span></span>`).join('');
+        U.tiles($('#s2Tiles', sb), [['p(answer)', prod.toFixed(3), 'blue', 'product of token probabilities'], ['Loss', loss.toFixed(2), 'red', '−Σ log p'], ['Weakest token', tok[p.indexOf(Math.min(...p))], '', 'biggest share of the loss']]); };
+      tok.forEach((t, i) => U.slider($('#s2Ctl', sb), { label: `p(“${t}”)`, min: .05, max: .99, step: .01, value: p[i], fmt: v => v.toFixed(2), id: 's2-' + i }, v => { p[i] = v; paint(); }));
+      paint();
+    },
+    notes: {
+      say: ['Stage 2 is the same setup with labeled data. The projector starts where Stage 1 left it; the encoder and LLM stay frozen.', '[Point to node classification] For classification, the prompt gives the graph tokens, target paper first, plus its abstract and title, and asks for the category. In the paper’s example the answer is cs.IT.', '[Point to link prediction] For link prediction it gets two subgraphs and says yes or no: are they connected?', '[Point to Eq. 5] The objective is next-token prediction: the answer’s probability is the product of each token’s probability, given the graph tokens, the instruction, and the words so far. Theta is what’s trainable, here the projector.', 'So it isn’t fine-tuning. Gradients pass through the frozen model to the projector, but the LLM’s weights don’t move.'],
+      transition: 'The last piece doesn’t change the architecture. It changes what the training answers look like.',
+      ask: 'If the LLM is frozen, how does it learn the output format?', answer: 'The instruction states the format and Vicuna already follows instructions. Stage 2 only changes how the graph information is presented.',
+      source: '§3.2.2; Eq. (5) in §3.2.1; Fig. 4 middle (central node 2) and bottom (nodes 8471, 19368).'
+    }
+  });
+
+  /* ---------- ch12 CoT ---------- */
+  scene({
+    id: 'cot', section: 'meth', ch: 12, kicker: 'Deep dive 5/5 · §3.3', short: 'CoT distillation', time: '11:45–12:50',
+    title: 'CoT distillation: train on GPT-3.5’s step-by-step answers',
+    dq: 'Can a 7B model borrow a bigger model’s reasoning, and should we trust what it says?',
+    lab: 'Compare -std, -cot and -mix answers, then read the rationale critically.',
+    html: `<div id="mm"></div><div class="split">
+      <div class="rail">
+        <p class="lede">Going from Arxiv’s 40 classes to Cora’s 70 is a big shift, and a 7B model doesn’t reason step by step well on its own. So they borrow it.</p>
+        <p>GPT-3.5 classifies each training paper with the prompt <i>“Please think about the categorization in a step-by-step manner.”</i> Its rationale plus label becomes a Stage 2 answer. No parameters are added.</p>
+        <div id="cTabs"></div><div id="cBody" class="card"></div>
+        <div class="kicker">At test time</div>
+        <div class="tokrow"><span class="tk g" style="cursor:default">subgraph</span>→<span class="tk g" style="cursor:default">f_G</span>→<span class="tk g" style="cursor:default">Ĥ</span>→<span class="tk g" style="cursor:default">f_P</span>→<span class="tk m">graph tokens + instruction</span>→<span class="tk">Vicuna-7B</span>→<span class="tk">label + rationale</span></div>
+      </div>
+      <div class="viz"><div class="vtag">GraphGPT’s rationale for TiM-DNN · Table 6, excerpt</div>
+        <p class="quote">“1. cs.LG (Machine Learning): … the paper discusses the use of ternary DNNs for language modeling and image classification …”</p>
+        <p class="quote">“3. cs.NE (Numerical Analysis): …”</p>
+        <div class="controls" id="rCtl"></div>
+        <div id="rOut" class="cards" style="grid-template-columns:1fr"></div>
+      </div></div>`,
+    src: '§3.3 · data variants §4.2–4.3 · quotes from Table 6 (p. 9) · reading of the rationale is mine',
+    myth: '“The rationale shows the model used the graph.” This one never mentions a neighbor; every reason comes from the abstract.',
+    mount(sb) {
+      $('#mm', sb).innerHTML = minimap('cot'); wireMini(sb);
+      U.tabs($('#cTabs', sb), [['std', '-std'], ['cot', '-cot'], ['mix', '-mix']], v => {
+        $('#cBody', sb).innerHTML = { std: '<h4>Plain answers</h4><p>The training answer is just the label, written as text. Best on PubMed (0.701 accuracy).</p>', cot: '<h4>GPT-3.5 rationales</h4><p>The answer is a numbered, step-by-step rationale ending in the label. Best on Cora (0.181) and the only variant above untuned Vicuna there, but drops to 0.521 on PubMed.</p>', mix: '<h4>Half and half</h4><p>Mixes plain and CoT answers. Used mainly in the multitask runs (Table 2, backup B3).</p>' }[v];
+      });
+      const R = [['Is the label right?', 'Yes. cs.LG is ranked first, and that is TiM-DNN’s true label.', 'blue'], ['Does it cite the graph?', 'No. Every reason comes from the abstract (“ternary DNNs for language modeling and image classification”). Not one neighbor is mentioned.', 'red'], ['Are its facts right?', 'No. cs.NE is Neural and Evolutionary Computing, not “Numerical Analysis” (that is cs.NA).', 'red'], ['So what is it?', 'Fluent text that imitates GPT-3.5’s style. Treat it as an output format, not as evidence of how the model decided.', '']];
+      let k = 0; const out = $('#rOut', sb);
+      const next = () => { if (k >= R.length) return; const [q, a, c] = R[k++]; out.insertAdjacentHTML('beforeend', `<div class="card ${c}"><h4>${q}</h4><p>${a}</p></div>`); if (k >= R.length) b.disabled = true; };
+      const b = U.btn($('#rCtl', sb), 'Audit the next claim', next, 'primary');
+      U.btn($('#rCtl', sb), 'Show all', () => { while (k < R.length) next(); });
+      next();
+    },
+    check: { q: 'What is the strongest conclusion you can draw from the TiM-DNN rationale?', opts: ['The model used the neighbors to fix the title’s misleading signal', 'The label is right, but the rationale gives no evidence the graph was used', 'CoT makes the model’s facts reliable'], a: 1, why: 'The rationale cites only the abstract and even mislabels cs.NE, so it can’t show graph use.', hints: ['No neighbor is mentioned in the rationale.', 'It calls cs.NE “Numerical Analysis,” which is wrong.'] },
+    notes: {
+      say: ['The last piece is chain-of-thought distillation. Going from 40 classes to Cora’s 70 is a big shift, and a 7B model doesn’t reason step by step well on its own, so they borrow it.', '[Point to the top] GPT-3.5 classifies each training paper “in a step-by-step manner,” and its reasoning plus label becomes the training answer. That’s “-cot”; “-std” uses short answers; “-mix” is half and half. No new parameters.', '[Point to the pipeline] At test time it’s one pass, ending with a label and an explanation.', '[Point to the quote] Here’s its explanation for TiM-DNN. The label is right, but the reason is all abstract. Not one neighbor is mentioned, and it calls cs.NE “Numerical Analysis,” which is wrong. So I treat these rationales as fluent text, not evidence.'],
+      transition: 'So does any of this actually help? On to the experiments.',
+      ask: 'Were GPT-3.5’s rationales checked for correctness?', answer: 'The paper doesn’t say. If wrong ones were kept, the student learns those mistakes too.',
+      source: '§3.3; §4.2 Obs. 3; §4.3 (“-mix”); Table 6. The observation that the rationale cites no neighbor is my reading.'
+    }
+  });
+})();
+/* ---- scenes: experiments, conclusion, backup ---- */
+(function () {
+  const { $, $$ } = U;
+  // Table 1 (p. 6): [model, group, Arxiv-Arxiv acc, F1, Arxiv-PubMed acc, F1, Arxiv-Cora acc, F1, (A+P)-Cora acc, F1, (A+P)-Arxiv acc, F1]
+  const T1 = [
+    ['MLP', 'b', .5179, .2536, .3940, .1885, .0258, .0037, .0220, .0006, .2127, .0145],
+    ['GraphSAGE', 'b', .5480, .3290, .3950, .1939, .0328, .0132, .0132, .0029, .1281, .0129],
+    ['GCN', 'b', .5267, .3202, .3940, .1884, .0214, .0088, .0187, .0032, .0122, .0008],
+    ['GAT', 'b', .5332, .3118, .3940, .1884, .0167, .0110, .0161, .0057, .1707, .0285],
+    ['RevGNN', 'b', .5474, .3240, .4440, .3046, .0272, .0101, .0217, .0016, .1309, .0126],
+    ['DGI', 'b', .5059, .2787, .3991, .1905, .0205, .0011, .0205, .0011, .5059, .2787],
+    ['GKD', 'b', .5570, .1595, .3645, .2561, .0470, .0093, .0406, .0037, .2089, .0179],
+    ['GLNN', 'b', .6088, .3757, .4298, .3182, .0267, .0115, .0182, .0092, .3373, .1115],
+    ['NodeFormer', 'b', .5922, .3328, .2064, .1678, .0152, .0065, .0144, .0053, .2713, .0855],
+    ['DIFFormer', 'b', .5986, .3355, .2959, .2503, .0161, .0094, .0100, .0007, .1637, .0234],
+    ['Baichuan-7B', 'l', .0946, .0363, .4642, .3876, .0405, .0469, .0405, .0469, .0946, .0363],
+    ['Vicuna-7B-v1.1', 'l', .2657, .1375, .5251, .4831, .1090, .0970, .1090, .0970, .2657, .1375],
+    ['Vicuna-7B-v1.5', 'l', .4962, .1853, .6351, .5231, .1489, .1213, .1489, .1213, .4962, .1853],
+    ['GraphGPT-v1.1-cot', 'g', .4913, .1728, .6103, .5982, .1145, .1016, .1250, .0962, .4853, .2102],
+    ['GraphGPT-stage2', 'g', .7511, .5600, .6484, .5634, .0813, .0713, .0934, .0978, .6278, .2538],
+    ['GraphGPT-std', 'g', .6258, .2622, .7011, .6491, .1256, .0819, .1501, .0936, .6390, .2652],
+    ['GraphGPT-cot', 'g', .5759, .2276, .5213, .4816, .1813, .1272, .1647, .1326, .6476, .2854]];
+  const SET = [['aa', 'Arxiv → Arxiv', 'supervised', 40], ['ap', 'Arxiv → PubMed', 'zero-shot', 3], ['ac', 'Arxiv → Cora', 'zero-shot', 70], ['apc', '(Arxiv+PubMed) → Cora', 'zero-shot', 70], ['apa', '(Arxiv+PubMed) → Arxiv', 'after multitask', 40]];
+  const GC = { b: '#8A94AD', l: '#4C8DFF', g: '#F2385A' };
+
+  /* ---------- ch13 setup ---------- */
+  scene({
+    id: 'setup', section: 'exp', ch: 13, kicker: 'Experiments · setup', short: 'Datasets and metrics', time: '12:50–13:50',
+    title: 'Three citation graphs, from 3 to 70 classes',
+    dq: 'Why can the same model look strong on one target and weak on another?',
+    html: `<div class="split">
+      <div class="viz"><div class="vtag">Bar length = number of classes · chance = 1 / classes</div><div id="dBars" style="display:flex;flex-direction:column;gap:14px"></div>
+        <p class="src" style="margin:0">This is the expanded 70-class Cora, not the usual 7-class one. *OGB-arxiv count from Hu et al. 2020.</p></div>
+      <div class="rail">
+        <p class="lede">All node text goes through one pretrained BERT, so the three graphs share a feature space. That is what makes transfer possible.</p>
+        <div class="card"><h4>Metrics</h4><p><b>Accuracy</b>: share labeled correctly. <b>Macro-F1</b>: F1 per class, averaged, so rare classes count equally. It punishes a model that only gets the big classes. <b>AUC, AP</b>: link prediction.</p></div>
+        <div class="card"><h4>Baselines</h4><p>MLP; GCN, GAT, GraphSAGE, RevGNN; DGI; GKD, GLNN; NodeFormer, DIFFormer; and <b>untuned</b> Baichuan-7B and Vicuna-7B. Remember that last word.</p></div>
+        <div class="callout eng-only">How do GNNs do zero-shot with a different label set? §4.2 says they use a “transfer-trained classifier, such as a linear layer,” without details. The paper reports the Arxiv split as “6:2:3”; PubMed and Cora use 3:1:1.</div>
+      </div></div>`,
+    src: '§4.1 · chance levels are my arithmetic',
+    notice: 'Chance on Cora is 1.4%, so 0.18 accuracy is far above chance and still low.',
+    mount(sb) {
+      const D = [['PubMed', '19,717 papers · 44,338 links', 3, 'zero-shot target', 'blue'], ['OGB-arxiv', '169,343 papers*', 40, 'training set', 'red'], ['Cora (expanded)', '25,120 papers', 70, 'zero-shot target', 'blue']];
+      $('#dBars', sb).innerHTML = D.map(([n, s, k, r, c]) => `<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${n}</b><span class="c-muted" style="font-size:13px">${s} · ${r}</span></div><div class="hbar" style="grid-template-columns:minmax(0,1fr) 150px"><div class="tr"><i style="width:${k / 70 * 100}%;background:var(--${c});box-shadow:0 0 14px var(--${c})"></i></div><span class="mono" style="color:var(--hi)">${k} classes · ${(100 / k).toFixed(1)}%</span></div></div>`).join('');
+    },
+    check: { q: 'Why does the paper report Macro-F1 as well as accuracy?', opts: ['It is easier to compute', 'It weights every class equally, so a model can’t score well by only getting the big classes', 'It measures link prediction'], a: 1, why: 'Accuracy rewards the frequent classes; Macro-F1 averages per-class F1.', hints: ['Both are simple to compute.', 'AUC and AP are used for link prediction.'] },
+    notes: {
+      say: ['Everything is citation graphs.', '[Point to the bars] Arxiv is the training set: 40 computer-science categories. The targets sit at opposite ends. PubMed has three classes, so guessing gets a third. Cora has seventy, so chance is about one and a half percent. The same model can look strong on one and weak on the other for that reason alone.', '[Point to the BERT line] All text goes through one BERT, so features share a space. That’s what makes transfer possible.', '[Point to metrics] Accuracy is share correct. Macro-F1 averages over classes equally, so it punishes a model that only gets the big classes. That matters in a minute.', '[Point to baselines] Baselines are many GNNs, plus two 7B LLMs used with no tuning at all. Remember that detail.'],
+      transition: 'Here are the main results.',
+      ask: 'How do GNNs do zero-shot with a different label set?', answer: '§4.2 says they use a “transfer-trained classifier, such as a linear layer,” without details.',
+      source: '§4.1.1–4.1.3. OGB-arxiv node count is from Hu et al. 2020, not this paper.'
+    }
+  });
+
+  /* ---------- ch14 results ---------- */
+  scene({
+    id: 'results', section: 'exp', ch: 14, kicker: 'Experiments · Table 1', short: 'Main results', time: '13:50–15:15',
+    title: 'A different GraphGPT variant wins each setting',
+    dq: 'Does GraphGPT beat the right baseline, and by how much?',
+    lab: 'Explore all of Table 1 by setting and metric; test the majority-class collapse.',
+    html: `<div class="viz"><div class="vtag"><span class="live"></span>Table 1 explorer · all 17 rows</div>
+        <div class="controls" id="rCtl"></div>
+        <div id="rChart" class="tw"></div>
+        <div class="legend"><span style="--c:#8A94AD">non-LLM baseline</span><span style="--c:var(--blue)">LLM, no tuning</span><span style="--c:var(--red)">GraphGPT</span><span style="--c:#B65CFF">chance (accuracy only)</span></div>
+        <div id="rTiles" class="tiles"></div></div>
+      <div class="split even">
+        <div class="card red"><h4>The lead over the plain LLM shrinks as the target gets harder</h4><p>Best GraphGPT minus untuned Vicuna-7B-v1.5, accuracy: <b>+25.5</b> points on Arxiv, <b>+6.6</b> on PubMed, <b>+3.2</b> on Cora. Each time it is a different variant.</p></div>
+        <div class="card"><h4>Collapse check: what does “always guess the biggest class” score?</h4><p>If one class is a share <i>p</i> of the test set, predicting it every time gives accuracy <i>p</i>, F1 = 2p / (1 + p) on that class and 0 elsewhere.</p><div class="controls" id="mCtl"></div><div id="mT" class="tiles"></div><p class="c-dim" style="font-size:13px">On PubMed, MLP, GCN and GAT all report 0.394 / 0.188. The paper doesn’t give class shares; the match is my analysis.</p></div>
+      </div>`,
+    src: 'Values from Table 1 (p. 6) · gains, chance lines and the majority-class check are my arithmetic',
+    myth: '“GraphGPT is 2–10× better than GNNs.” Against collapsed zero-shot GNNs, yes. Against the untuned LLM, the fair baseline, it is 3 to 25 points.',
+    mount(sb) {
+      let set = 'ap', met = 'acc', llmOnly = false;
+      const draw = () => {
+        const si = SET.findIndex(s => s[0] === set), col = 2 + si * 2 + (met === 'f1' ? 1 : 0), S = SET[si];
+        const rows = T1.filter(r => !llmOnly || r[1] !== 'b');
+        const max = Math.max(...rows.map(r => r[col])) * 1.1;
+        const W = 760, rh = 24, top = 30, left = 150, H = top + rows.length * rh + 26, X = v => left + v / max * (W - left - 60);
+        const best = { b: Math.max(...T1.filter(r => r[1] === 'b').map(r => r[col])), g: Math.max(...T1.filter(r => r[1] === 'g').map(r => r[col])) };
+        let s = `<svg viewBox="0 0 ${W} ${H}" class="flow" role="img" aria-label="${S[1]} ${met === 'acc' ? 'accuracy' : 'Macro-F1'} by model" style="min-width:560px;max-width:880px">`;
+        for (let k = 0; k <= 4; k++) { const v = max / 1.1 * k / 4, x = X(v); s += `<line x1="${x}" y1="${top - 6}" x2="${x}" y2="${H - 22}" stroke="rgba(110,130,255,.12)"/><text x="${x}" y="${H - 6}" text-anchor="middle" fill="#7F8AA8" style="font:500 11px var(--f-mono)">${v.toFixed(2)}</text>`; }
+        rows.forEach((r, i) => { const y = top + i * rh, v = r[col], c = GC[r[1]], isBest = (r[1] === 'g' && v === best.g) || (r[1] === 'b' && v === best.b) || r[0] === 'Vicuna-7B-v1.5';
+          s += `<text x="${left - 10}" y="${y + 15}" text-anchor="end" fill="${isBest ? '#F6F7FD' : '#A6B0CC'}" style="font:${isBest ? 600 : 500} 12px var(--f-body)">${r[0]}</text><rect x="${left}" y="${y + 4}" width="${Math.max(1, X(v) - left)}" height="${rh - 8}" rx="4" fill="${c}" opacity="${isBest ? 1 : .55}" style="${isBest && r[1] !== 'b' ? `filter:drop-shadow(0 0 8px ${c})` : ''}"/><text x="${X(v) + 6}" y="${y + 15}" fill="${isBest ? '#F6F7FD' : '#A6B0CC'}" style="font:500 11.5px var(--f-mono)">${v.toFixed(4)}</text>`; });
+        if (met === 'acc') { const ch = 1 / S[3]; if (ch < max) { const x = X(ch); s += `<line x1="${x}" y1="${top - 10}" x2="${x}" y2="${H - 22}" stroke="#B65CFF" stroke-width="2" stroke-dasharray="5 4"/><text x="${x + 4}" y="${top - 14}" fill="#CFA2FF" style="font:600 11px var(--f-mono)">chance ${(ch * 100).toFixed(1)}%</text>`; } }
+        $('#rChart', sb).innerHTML = s + '</svg>';
+        const vic = T1[12][col], g = T1.filter(r => r[1] === 'g').reduce((a, r) => r[col] > a[col] ? r : a);
+        const bb = T1.filter(r => r[1] === 'b').reduce((a, r) => r[col] > a[col] ? r : a);
+        U.tiles($('#rTiles', sb), [['Setting', S[1], '', S[2] + ' · ' + S[3] + ' classes'], ['Best GraphGPT', g[col].toFixed(3), 'red', g[0]], ['Untuned Vicuna-v1.5', vic.toFixed(3), 'blue', ((g[col] - vic) * 100 >= 0 ? '+' : '') + ((g[col] - vic) * 100).toFixed(1) + ' pts for GraphGPT'], ['Best non-LLM', bb[col].toFixed(3), '', bb[0]]]);
+      };
+      const c = $('#rCtl', sb);
+      U.seg(c, SET.map(s => [s[0], s[1]]), set, v => { set = v; draw(); }, 'Setting');
+      U.seg(c, [['acc', 'Accuracy'], ['f1', 'Macro-F1']], met, v => { met = v; draw(); }, 'Metric');
+      U.check(c, { label: 'Hide non-LLM baselines', id: 'r-llm' }, v => { llmOnly = v; draw(); });
+      draw();
+      let p = .394, k = 3;
+      const mt = () => { const f = 2 * p / (1 + p); U.tiles($('#mT', sb), [['Accuracy', p.toFixed(3), '', 'share of largest class'], ['F1, that class', f.toFixed(3), '', '2p / (1 + p)'], ['Macro-F1', (f / k).toFixed(4), Math.abs(f / k - .1884) < .0006 && k === 3 ? 'red' : 'blue', Math.abs(f / k - .1884) < .0006 && k === 3 ? 'matches GCN / GAT exactly' : 'divide by ' + k + ' classes']]); };
+      U.slider($('#mCtl', sb), { label: 'Largest-class share p', min: .2, max: .8, step: .001, value: .394, fmt: v => v.toFixed(3), id: 'm-p' }, v => { p = v; mt(); });
+      U.slider($('#mCtl', sb), { label: 'Classes', min: 2, max: 10, step: 1, value: 3, id: 'm-k' }, v => { k = v; mt(); });
+      mt();
+    },
+    check: { q: 'On Arxiv → PubMed, GCN, GAT and MLP all score 0.394 accuracy and 0.188 Macro-F1. What does that most likely mean?', opts: ['They are strong, well-tuned baselines', 'They collapsed to predicting one class', 'PubMed has 39.4% noise'], a: 1, why: 'Always predicting a class with share 0.394 gives Macro-F1 = 0.565 / 3 = 0.188, matching to four digits.', hints: ['Three different models with identical scores is a warning sign.', 'Use the collapse calculator: p = 0.394, 3 classes.'] },
+    notes: {
+      say: ['Accuracy from Table 1. Gray is the best non-LLM baseline, blue is Vicuna with no tuning, red are GraphGPT variants.', '[Arxiv → Arxiv] Supervised on Arxiv: the best GNN gets 0.61, GraphGPT stage-2-only gets 0.75.', '[Arxiv → PubMed. Emphasize: zero-shot] Arxiv to PubMed: the best GNN drops to 0.44. Plain Vicuna gets 0.64 from text alone. GraphGPT-std gets 0.70.', '[Arxiv → Cora] Cora: everything’s low. The CoT variant leads at 0.18 against Vicuna’s 0.15.', 'So GraphGPT tops every panel, but with a different variant each time, and its lead over the plain LLM shrinks from 25 points to 7 to 3 as the target gets harder.', '[Collapse check] Also: on PubMed, GCN, GAT and MLP score exactly 0.394 with Macro-F1 0.188. That’s precisely what always predicting the biggest class gives. Those baselines collapsed, and the paper’s “2 to 10 times better” is measured against that.'],
+      transition: 'Which parts of the method are responsible for these gains?',
+      ask: 'Are the zero-shot GNN comparisons fair?', answer: 'Not really. GNNs can’t name unseen classes and need a newly trained head, which the paper doesn’t describe. The fair comparison is against the untuned LLM.',
+      source: 'Table 1; §4.2. Gains, chance levels and the majority-class arithmetic are mine.'
+    }
+  });
+
+  /* ---------- ch15 ablations ---------- */
+  const AB = [
+    ['Encoder only (w/o LR)', 'Table 4', [.5807, .2462, .2523, .1925, .0050, .0016]],
+    ['Stage 2 only', 'Table 1 -stage2', [.7511, .5600, .6484, .5634, .0813, .0713]],
+    ['Stages 1 + 2 (std)', 'Table 1 -std', [.6258, .2622, .7011, .6491, .1256, .0819]],
+    ['Stages 1 + 2 + CoT', 'Table 1 -cot', [.5759, .2276, .5213, .4816, .1813, .1272]]];
+  const VIC = [.4962, .1853, .6351, .5231, .1489, .1213];
+  scene({
+    id: 'ablation', section: 'exp', ch: 15, kicker: 'Experiments · Tables 1, 4, 5', short: 'Ablations and cost', time: '15:15–16:40',
+    title: 'Every component helps somewhere and hurts somewhere',
+    dq: 'Is there one GraphGPT that wins everywhere?',
+    lab: 'Switch between deltas and raw scores; build the paper’s best-per-column row.',
+    html: `<div class="viz"><div class="vtag"><span class="live"></span>Change vs. untuned Vicuna-7B-v1.5, percentage points</div>
+        <div class="controls" id="hCtl"></div>
+        <div class="tw"><table class="t hm" id="hT"></table></div>
+        <div id="hTxt" class="callout"></div></div>
+      <div class="split even">
+        <div class="card"><h4>Accuracy hides a Macro-F1 gap</h4><p>The std row’s Arxiv Macro-F1 (0.262) is below GCN (0.320) and GLNN (0.376), despite higher accuracy. So its gains sit in the frequent classes. Only Stage 2 alone (0.560) beats them on both.</p></div>
+        <div class="card"><h4>Cost · 4× A100 40 GB</h4><div class="tiles"><div class="tile red"><div class="tl">Tune full LLM</div><div class="tv">OOM</div><div class="ts">even at batch 1</div></div><div class="tile blue"><div class="tl">LLM frozen</div><div class="tv">26.6 h</div><div class="ts">22:53:33 + 03:44:35</div></div><div class="tile"><div class="tl">GPU memory</div><div class="tv">≈39.5k</div><div class="ts">per card, units unstated</div></div></div></div>
+      </div>`,
+    src: 'Values from Tables 1, 4, 5 · differences and 26.6 h are my arithmetic · encoder-only is Table 4 “w/o LR”; Vicuna is “w/o GS”',
+    notice: 'No row is better than Vicuna in every column. The paper’s “ours” row picks the best variant per column.',
+    mount(sb) {
+      let mode = 'delta', compose = false;
+      const H = ['Arxiv Acc', 'Arxiv F1', 'PubMed Acc', 'PubMed F1', 'Cora Acc', 'Cora F1'];
+      const cell = (v, d) => { if (mode === 'raw') return `<td class="cell" style="background:rgba(255,255,255,.04)">${v.toFixed(3)}</td>`; const a = U.clamp(Math.abs(d) / 30, .12, 1); return `<td class="cell" style="background:${d >= 0 ? `rgba(76,141,255,${.15 + .6 * a})` : `rgba(242,56,90,${.15 + .6 * a})`}">${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}</td>`; };
+      const draw = () => {
+        let html = `<tr><th></th>${H.map(h => `<th class="n">${h}</th>`).join('')}<th class="n">wins</th></tr>`;
+        AB.forEach(([n, s, v]) => { const d = v.map((x, i) => (x - VIC[i]) * 100); html += `<tr><th style="text-transform:none;letter-spacing:0;font:600 13px var(--f-body);color:var(--hi)">${n}<div class="src">${s}</div></th>${v.map((x, i) => cell(x, d[i])).join('')}<td class="n">${d.filter(x => x > 0).length} / 6</td></tr>`; });
+        if (compose) { const B = VIC.map((_, i) => Math.max(...AB.slice(1).map(r => r[2][i]))); const src = VIC.map((_, i) => { const r = AB.slice(1).reduce((a, r) => r[2][i] > a[2][i] ? r : a); return r[0].replace('Stages 1 + 2 + ', '').replace('Stages 1 + 2 ', '').replace(/[()]/g, ''); });
+          html += `<tr class="hl"><th style="text-transform:none;letter-spacing:0;font:600 13px var(--f-body);color:var(--red2)">Best per column<div class="src">not one model</div></th>${B.map((x, i) => cell(x, (x - VIC[i]) * 100).replace('</td>', `<div class="src" style="color:var(--hi)">${src[i]}</div></td>`)).join('')}<td class="n">6 / 6</td></tr>`; }
+        html += `<tr><th style="text-transform:none;letter-spacing:0;font:600 13px var(--f-body);color:var(--muted)">Vicuna-7B-v1.5<div class="src">untuned · Table 4 w/o GS</div></th>${VIC.map(x => mode === 'raw' ? `<td class="cell" style="background:rgba(76,141,255,.12)">${x.toFixed(3)}</td>` : '<td class="cell c-dim">0</td>').join('')}<td class="n">—</td></tr>`;
+        $('#hT', sb).innerHTML = html;
+        $('#hTxt', sb).innerHTML = compose ? 'That composite row wins all six columns, but it takes three different models to get there. A user has to pick one before seeing the target labels.' : 'Encoder alone collapses on transfer (−38 on PubMed): <b>the LLM is doing the transfer</b>. Stage 2 alone is the best supervised model but trails Vicuna on Cora. CoT is the only thing that beats Vicuna on Cora, and it costs 11 points on PubMed.';
+      };
+      U.seg($('#hCtl', sb), [['delta', 'Points vs. Vicuna'], ['raw', 'Raw scores']], mode, v => { mode = v; draw(); }, 'Display');
+      U.check($('#hCtl', sb), { label: 'Compose the paper’s best-per-column row', id: 'h-c' }, v => { compose = v; draw(); });
+      draw();
+    },
+    check: { q: 'What does the “encoder only” row (−38.3 on PubMed accuracy) tell us?', opts: ['The graph encoder is useless', 'Without the LLM, transfer to a new graph collapses; the LLM carries the transfer', 'PubMed is mislabeled'], a: 1, why: 'The encoder alone does fine on Arxiv (+8.5) but falls apart on unseen graphs; the LLM is what generalizes.', hints: ['It does help on Arxiv (+8.5).', 'Nothing suggests label problems.'] },
+    notes: {
+      say: ['I put the ablations into one picture: each cell is points better or worse than untuned Vicuna. Blue better, red worse.', '[Point to the top row] The encoder alone, no LLM: fine on Arxiv, but minus 38 on PubMed and minus 14 on Cora. The LLM is doing the transfer.', '[Point to Stage 2 only] Stage 2 alone is the best supervised model, but worse than Vicuna on Cora.', '[Point to the std row] Adding Stage 1 improves transfer, but Arxiv Macro-F1 drops to 0.26, below GCN and GLNN. So that accuracy comes from the big classes.', '[Point to the CoT row] CoT is the only thing that beats Vicuna on Cora, and it costs 11 points on PubMed.', 'No row is blue everywhere; the paper’s “ours” row picks the best per column.', '[Point to cost] Full tuning didn’t even fit in memory. The frozen setup trains, but it still took about 27 hours on four A100s and nearly all their memory.'],
+      transition: 'Let me pull that together.',
+      ask: '131.6M seems big for one linear layer.', answer: 'One decomposition fits exactly: 32,003 × 4,096 (word embeddings with 3 new tokens) + 128 × 4,096 + 4,096 (a linear projector). My hypothesis, not stated in the paper (backup B4).',
+      source: 'Tables 1, 4, 5. GPU memory reported as 39,517.75 (Stage 1) and 38,961.75 (Stage 2), units not stated.'
+    }
+  });
+
+  /* ---------- ch16 verdict ---------- */
+  scene({
+    id: 'verdict', section: 'concl', ch: 16, kicker: 'Conclusion', short: 'What the evidence supports', time: '16:40–17:25',
+    title: 'What the evidence supports, and what it leaves open',
+    html: `<div class="split even">
+      <div class="card blue" style="gap:14px"><div class="kicker" style="color:var(--blue2)">Supported</div>
+        <p style="color:var(--fg)">A projector holding <b>2%</b> of the parameters lets a frozen 7B LLM take graph input. The best variant beats untuned Vicuna in all three settings.</p>
+        <p style="color:var(--fg)"><b>The LLM is what transfers.</b> Without it, accuracy falls to 0.25 on PubMed and 0.005 on Cora.</p>
+        <p style="color:var(--fg)"><b>Stage 1 trades</b> supervised accuracy (−12.5 pts) for transfer (+5.3 and +4.4 pts).</p></div>
+      <div class="card red" style="gap:14px"><div class="kicker">Open · my reading</div>
+        <p style="color:var(--fg)"><b>Structure or soft prompt?</b> No control feeds graph tokens with the edges shuffled.</p>
+        <p style="color:var(--fg)"><b>No single model.</b> On Cora, 2 of 3 v1.5 variants are below untuned Vicuna.</p>
+        <p style="color:var(--fg)"><b>Statistics.</b> p-values are given, but not the test or the number of runs.</p>
+        <p style="color:var(--fg)"><b>Scope.</b> Citation graphs only, one 7B model family, static graphs.</p></div>
+      </div>
+      <div class="viz"><div class="vtag">Design the missing control</div><div id="vCtl" class="controls"></div><div id="vOut" class="callout blue"></div></div>
+      <p class="c-muted" style="margin:0">The authors’ next step (§6): prune or compress the LLM to shrink the overall model.</p>`,
+    src: 'Numbers from Tables 1, 4, 5 · the right-hand panel and the control experiments are my analysis, not the authors’',
+    lab: 'Pick a control experiment and read what each outcome would mean.',
+    mount(sb) {
+      const X = { shuf: ['Shuffle the edges, keep the nodes', 'Train and test with each paper’s neighbors replaced by random papers. If accuracy barely drops, the gain is a learned soft prompt, not structure. If it drops toward untuned Vicuna, the graph matters.'], self: ['Target token only', 'Feed only g₁ (the target paper’s own vector), no neighbor tokens. This separates “extra text-like signal” from “neighborhood signal.”'], seeds: ['Report seeds and variance', 'Run each variant over several seeds and report mean ± std. Several Cora gaps are 2–3 points; without variance we can’t tell which are real.'], rat: ['Ablate what the rationale needs', 'Remove the neighbors a CoT rationale would rely on and check whether the rationale changes. If it doesn’t, the text is decoration.'] };
+      const show = k => { $('#vOut', sb).innerHTML = `<b>${X[k][0]}.</b> ${X[k][1]}`; };
+      U.seg($('#vCtl', sb), Object.entries(X).map(([k, v]) => [k, v[0]]), 'shuf', show, 'Control experiment'); show('shuf');
+    },
+    check: { q: 'Which experiment would best test whether GraphGPT’s gains come from graph structure?', opts: ['Train on more Arxiv data', 'Replace each paper’s neighbors with random papers and compare', 'Use a bigger LLM'], a: 1, why: 'Shuffled edges keep the token budget and training identical but remove the real structure.', hints: ['More data changes many things at once.', 'A bigger LLM changes the language side, not the structure question.'] },
+    notes: {
+      say: ['What does the paper show?', '[Point to the blue panel] A projector with two percent of the parameters lets a frozen 7B model use graph input, and the best version beats the plain LLM everywhere. The LLM is what transfers. And Stage 1 helps transfer at a cost on Arxiv.', '[Point to the red panel] What’s open: there’s no run where graph tokens carry no real structure, like shuffled edges, so some gain could just be a learned soft prompt. There’s also no single best setup, the statistics aren’t explained, and it’s only citation graphs.'],
+      transition: 'So here’s what I’d take away.',
+      ask: 'Would it work on dynamic or very large graphs?', answer: 'Not tested. Graph tokens grow with subgraph size, and the encoder is static.',
+      source: '§6; Tables 1, 4, 5. The red panel is the presenter’s critique.'
+    }
+  });
+
+  /* ---------- ch17 takeaway ---------- */
+  scene({
+    id: 'takeaway', section: 'concl', ch: 17, kicker: 'Takeaway', short: 'Takeaway and references', time: '17:25–18:00',
+    title: '<span class="c-red">structure</span> + <span class="c-blue">language</span> + a trained bridge',
+    html: `<p class="lede" style="font:500 clamp(22px,2.6vw,32px)/1.3 var(--f-display);max-width:30ch;margin:0">A small trained projector is enough for a frozen LLM to read graph structure and carry it to a new graph.</p>
+      <p class="c-muted" style="margin:0;max-width:70ch">Still open: which variant to use for which target, and whether the gains come from the structure itself.</p>
+      <div class="card"><h4>References</h4><ol style="margin:0;padding-left:20px;color:var(--muted);display:flex;flex-direction:column;gap:6px;font-size:14.5px">
+        <li>Tang, Yang, Wei, Shi, Su, Cheng, Yin, Huang. <i>GraphGPT: Graph Instruction Tuning for Large Language Models.</i> SIGIR ’24. <a href="https://doi.org/10.1145/3626772.3657775" target="_blank" rel="noopener">doi:10.1145/3626772.3657775</a> · <a href="https://arxiv.org/abs/2310.13023" target="_blank" rel="noopener">arXiv:2310.13023</a> · <a href="https://github.com/HKUDS/GraphGPT" target="_blank" rel="noopener">github.com/HKUDS/GraphGPT</a></li>
+        <li>Kipf &amp; Welling. Semi-Supervised Classification with Graph Convolutional Networks. ICLR 2017.</li>
+        <li>Radford et al. Learning Transferable Visual Models From Natural Language Supervision (CLIP). ICML 2021.</li>
+        <li>Wei et al. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. NeurIPS 2022.</li>
+        <li>Hu et al. Open Graph Benchmark. NeurIPS 2020.</li></ol></div>
+      <div class="controls"><button class="btn primary" type="button" id="tkQ">Open the Q&amp;A prep →</button><button class="btn" type="button" id="tkS">Back to the start</button></div>`,
+    mount(sb) { $('#tkQ', sb).onclick = () => U.goId('qa'); $('#tkS', sb).onclick = () => U.goId('start'); },
+    notes: {
+      say: ['[Stop moving for this one]', 'In one sentence: a small trained projector is enough for a frozen language model to read graph structure and carry it to a new graph.', 'What I’d want next is to know which setup fits which target, and whether the gain is really the structure.', 'Thanks. Happy to take questions.'],
+      ask: 'What would you do next?', answer: 'Add a shuffled-edge control, test on non-citation graphs, report seeds and variance, and check whether rationales change when the neighbors they’d need are removed.',
+      source: '§6; references.'
+    }
+  });
+
+  /* ---------- backup ---------- */
+  scene({
+    id: 'b3', section: 'ref', kicker: 'Backup B3 · RQ2', short: 'Multitask and link prediction',
+    title: 'Instruction mixtures and link prediction',
+    html: `<div class="split even">
+      <div class="card"><h4>Table 2 · node classification, trained on Arxiv + PubMed</h4><div class="tw"><table class="t"><tr><th>Instruction mix</th><th class="n">Arxiv Acc</th><th class="n">Arxiv F1</th><th class="n">Cora Acc</th><th class="n">Cora F1</th></tr>
+        <tr><td>std + std</td><td class="n">0.6390</td><td class="n">0.2652</td><td class="n">0.1501</td><td class="n">0.0936</td></tr><tr><td>cot + cot</td><td class="n">0.6476</td><td class="n">0.2854</td><td class="n">0.1647</td><td class="n">0.1326</td></tr><tr><td>mix + mix</td><td class="n">0.6139</td><td class="n">0.2772</td><td class="n">0.1544</td><td class="n">0.1048</td></tr><tr><td>std + std + Link</td><td class="n">0.5931</td><td class="n">0.2238</td><td class="n">0.1847</td><td class="n">0.1579</td></tr><tr class="hl"><td>mix + mix + Link</td><td class="n">0.6874</td><td class="n">0.3761</td><td class="n">0.1836</td><td class="n">0.1494</td></tr></table></div>
+        <p>Arxiv = supervised; Cora = zero-shot. Adding Link instructions improves 3 of these 4 comparisons. “No forgetting”: GraphGPT-cot 0.6476 on (Arxiv+PubMed) → Arxiv vs. GCN 0.0122 after sequential training.</p></div>
+      <div class="card"><h4>Table 3 · link prediction, PubMed</h4><div class="tw"><table class="t"><tr><th>Model</th><th class="n">AUC</th><th class="n">AP</th></tr>
+        <tr><td>MLP</td><td class="n">0.5583</td><td class="n">0.5833</td></tr><tr><td>GAT</td><td class="n">0.5606</td><td class="n">0.6373</td></tr><tr><td>GraphSAGE</td><td class="n">0.5041</td><td class="n">0.5813</td></tr><tr><td>RevGNN</td><td class="n">0.4538</td><td class="n">0.5083</td></tr><tr><td>Node2Vec</td><td class="n">0.6535</td><td class="n">0.6885</td></tr><tr><td>w/o Link</td><td class="n">0.5010</td><td class="n">0.5005</td></tr><tr><td>only Link</td><td class="n">0.6704</td><td class="n">0.6087</td></tr><tr class="hl"><td>std + std + Link</td><td class="n">0.8246</td><td class="n">0.8026</td></tr><tr><td>mix + mix + Link</td><td class="n">0.6451</td><td class="n">0.5886</td></tr></table></div>
+        <p>The mixture matters: std + Link reaches AUC 0.82, but mix + Link (0.65) falls below Node2Vec.</p></div></div>`,
+    src: 'Tables 1–3 (pp. 6–7) · “std + std” = Arxiv-std + PubMed-std'
+  });
+  scene({
+    id: 'b4', section: 'ref', kicker: 'Backup B4 · notation', short: 'Reading the equations carefully',
+    title: 'Reading the equations carefully',
+    html: `<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div class="card"><h4>Eq. 2 vs. the classic GCN</h4><p>Kipf &amp; Welling also degree-normalize Ã and index W by layer, which the paper’s Eq. 2 doesn’t show:</p><div class="eq"><i>H</i><sup>(<i>l</i>)</sup> = σ( D̃<sup>−½</sup> Ã D̃<sup>−½</sup> <i>H</i><sup>(<i>l</i>−1)</sup> <i>W</i><sup>(<i>l</i>)</sup> )</div></div>
+      <div class="card"><h4>Γ₃ shapes</h4><p>Printed: Γ₃ = (T̂ᵀ T̂′ᵀ)·exp(τ), i.e. (d×N)(d×N), which is undefined. With N×N like Γ₁ and Γ₂, the consistent reading is T̂ T̂′ᵀ. Also, y uses n (batch size) where the text uses N.</p></div>
+      <div class="card"><h4>Eq. 5 conditioning</h4><p>Printed with X<sub>I,&lt;i</sub> (instruction tokens before i). In standard instruction tuning the whole instruction precedes the answer and the loss is on answer tokens.</p></div>
+      <div class="card red"><h4>Why 131.6M tuned params?</h4><p class="mono" style="color:var(--hi)">131,612,672 = 32,003 × 4,096 + (128 × 4,096 + 4,096)</p><p>Hypothesis: input embeddings for 32,000 + 3 special tokens, plus a 128 → 4,096 linear projector. The same decomposition is consistent with Table 5’s 6,607,884,288 for full tuning. Not stated in the paper.</p></div></div>`,
+    src: 'Paper Eqs. (2), (4), (5), Table 5 · GCN: Kipf & Welling, ICLR 2017 · notes and arithmetic are the presenter’s analysis'
+  });
+  const QA = [
+    ['Is this the same as prompting ChatGPT with the graph?', 'No. Earlier work writes the graph out as text. GraphGPT feeds learned graph embeddings in as tokens.', 'graphs'],
+    ['Does GraphGPT treat edges as directed?', 'The paper calls OGB-arxiv directed but never says whether the encoder symmetrizes edges. Eq. 2 just uses A + I.', 'graphs'],
+    ['Why not stack many GNN layers?', 'Deep GNNs over-smooth: node vectors converge. GraphGPT samples a small subgraph and lets the LLM read it.', 'gnn'],
+    ['Does token cost grow with graph size?', 'Yes, about one graph token per node, so it’s linear in subgraph size. Compact, not constant.', 'tokens'],
+    ['Is this transfer learning or zero-shot?', 'Both. It transfers from a labeled source graph and is evaluated zero-shot on the target.', 'problem'],
+    ['Is the LLM really never updated?', 'Table 5 and the tuning-strategy paragraphs say frozen. One sentence in §3.2.2 says “fine-tuning the LLM,” which reads as loose wording; 131.6M vs. 6.61B tuned parameters backs the frozen reading.', 'arch'],
+    ['Why 131.6M if the projector is one linear layer?', 'It likely includes the word-embedding table with 3 new special tokens: 32,003 × 4,096 + 128 × 4,096 + 4,096. My hypothesis (B4).', 'input'],
+    ['Why two instruction-tuning stages?', 'Stage 1 teaches reading graph tokens without labels; Stage 2 specializes. Dropping Stage 1 helps supervised accuracy but hurts transfer (Table 1).', 'phases'],
+    ['Why add the identity in Ã?', 'Without self-loops a node’s update depends only on its neighbors and drops its own features.', 'encoders'],
+    ['Is τ learned? What are the λs?', 'In CLIP, exp(τ) is learned. The paper states neither whether τ is learned nor the λ values.', 'contrastive'],
+    ['Why would matching titles help classification?', 'To match titles the LLM must tell graph tokens apart using text-aligned information, so the projector learns readable tokens. Evidence is indirect: dropping Stage 1 hurts transfer.', 'stage1'],
+    ['If the LLM is frozen, how does it learn the output format?', 'The instruction states the format and Vicuna already follows instructions. Stage 2 changes how graph information is presented.', 'stage2'],
+    ['Were GPT-3.5’s rationales checked for correctness?', 'The paper doesn’t say. If wrong ones were kept, the student learns those mistakes too.', 'cot'],
+    ['How do GNNs do zero-shot with a different label set?', '§4.2 mentions a “transfer-trained classifier, such as a linear layer,” without details.', 'setup'],
+    ['Are the zero-shot GNN comparisons fair?', 'Not really. GNNs can’t name unseen classes and need a new head the paper doesn’t describe. The fair comparison is the untuned LLM.', 'results'],
+    ['Would it work on dynamic or very large graphs?', 'Not tested. Graph tokens grow with subgraph size and the encoder is static.', 'verdict'],
+    ['What would you do next?', 'A shuffled-edge control, non-citation graphs, seeds and variance, and checking whether rationales change when the neighbors they’d need are removed.', 'verdict']];
+  scene({
+    id: 'qa', section: 'ref', kicker: 'Q&A prep', short: 'Likely questions',
+    title: 'Likely questions, with short answers',
+    dq: 'Each answer links back to the chapter that supports it.',
+    html: `<div class="controls"><button class="btn" type="button" id="qaOpen">Expand all</button><button class="btn" type="button" id="qaClose">Collapse all</button></div><div id="qaL" style="display:flex;flex-direction:column;gap:8px"></div>`,
+    mount(sb) {
+      $('#qaL', sb).innerHTML = QA.map(([q, a, id], i) => { const s = SCENES.find(x => x.id === id); return `<details class="qa"><summary>${q}<span class="qmeta">${s && s.ch != null ? 'Ch ' + s.ch : ''}</span></summary><p>${a} <button class="btn ghost" type="button" data-go="${id}" style="margin-left:6px">Go to chapter →</button></p></details>`; }).join('');
+      $$('[data-go]', sb).forEach(b => b.onclick = () => U.goId(b.dataset.go));
+      $('#qaOpen', sb).onclick = () => $$('details', sb).forEach(d => d.open = true);
+      $('#qaClose', sb).onclick = () => $$('details', sb).forEach(d => d.open = false);
+    }
+  });
+
+  U.boot();
+})();
+</script>
+
+</body></html>
